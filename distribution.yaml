@@ -1,0 +1,25 @@
+name: first-agent
+version: 0.1.0
+description: "Private Hermes starter agent for company onboarding, LINE, prompt coaching, and AI workspace guidance."
+hermes_requires: ">=0.12.0"
+author: "cerjary"
+license: "Proprietary"
+env_requires:
+  - name: LINE_CHANNEL_ACCESS_TOKEN
+    description: "LINE Messaging API long-lived channel access token"
+    required: true
+  - name: LINE_CHANNEL_SECRET
+    description: "LINE Messaging API channel secret"
+    required: true
+  - name: LINE_ALLOWED_USERS
+    description: "Comma-separated LINE user IDs allowed to use the agent"
+    required: false
+  - name: LINE_PUBLIC_URL
+    description: "Public HTTPS base URL for LINE webhook/media, e.g. https://agent.example.com"
+    required: false
+
+distribution_owned:
+  - SOUL.md
+  - config.yaml
+  - skills/
+  - distribution.yaml
