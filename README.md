@@ -1,30 +1,97 @@
 # Hermes First Agent
 
-Private starter distribution for creating a company's first Hermes agent with LINE connectivity and a lightweight AI-advisor role.
+Private starter distribution for creating an organization's first Hermes **Company AI Advisor** with LINE connectivity.
 
-## What it creates
+## Role
 
-- One isolated Hermes profile per company
-- LINE Messaging API enabled
-- Secrets stored only in the installed profile's `.env`
-- Company/user seed context stored in Hermes memory
-- Generic `SOUL.md` for professional answers and AI adoption guidance
-- `prompt-advisor` skill
-- `workspace-advisor` skill for deciding between current chat, new chat, project/workspace, skill, specialist agent, or Tool/MCP
+The First Agent is intentionally not an Agent Router and not an Agent Builder.
+
+It provides four practical capabilities:
+
+- General Assistant — answer useful day-to-day questions directly.
+- Prompt Advisor — improve prompts when doing so materially helps.
+- Workspace Advisor — recommend current chat vs new chat vs project/workspace vs Skill vs Tool/MCP.
+- Agent Planning Advisor — recommend and specify a future specialist agent, but never create, deploy, modify, dispatch, or grant permissions to one.
+
+It can also build lightweight company context over time from onboarding data, official public information, user-provided documents, and connected sources. It is not intended to become a dedicated company knowledge agent.
+
+## Naming practice
+
+Standard Agent ID:
+
+```text
+<tenant>[-<business>]-<domain>-<role>
+```
+
+For the First Agent:
+
+```text
+Single-business tenant: <tenant>-ai-advisor
+Multi-business tenant:  <tenant>-<business>-ai-advisor
+```
+
+Examples:
+
+```text
+acme-ai-advisor
+skg-soocker-ai-advisor
+skg-nextoa-ai-advisor
+skg-shopline-order-analyst
+skg-soocker-opportunity-collector
+```
+
+See `NAMING.md` for the complete practice.
+
+## What the installer asks
+
+1. Tenant display name.
+2. Tenant code.
+3. Whether the tenant has multiple businesses/products.
+4. Business/product display name and code, only when needed.
+5. Website (optional).
+6. User department/role (optional).
+7. LINE Channel Access Token.
+8. LINE Channel Secret.
+9. LINE allowed user IDs (recommended).
+10. Public HTTPS URL (optional during initial setup).
+
+The Agent ID and display name are generated automatically from the naming practice. The installer does not ask the user to invent an Agent ID.
+
+## Example
+
+Single-business company:
+
+```text
+Tenant display name: Acme
+Tenant code: acme
+Multiple businesses/products? No
+
+Agent ID: acme-ai-advisor
+Display name: Acme AI Advisor
+```
+
+Multi-business group:
+
+```text
+Tenant display name: Soocker Group
+Tenant code: skg
+Multiple businesses/products? Yes
+Business display name: Soocker
+Business code: soocker
+
+Agent ID: skg-soocker-ai-advisor
+Display name: Soocker AI Advisor
+```
 
 ## Prerequisite
 
 Hermes Agent must already be installed and configured with an LLM provider.
 
-Official Hermes currently supports LINE as a bundled platform and profiles as installable git distributions.
-
 ## Private GitHub installation
 
-Recommended: keep this repository **Private** and grant read access only to approved GitHub users.
+Keep this repository **Private** and grant read access only to approved GitHub users.
 
-### Option A — SSH
-
-First verify the user can clone the private repository with their SSH key, then:
+### SSH
 
 ```bash
 git clone git@github.com:cerjary/hermes-first-agent.git
@@ -32,7 +99,7 @@ cd hermes-first-agent
 bash install.sh
 ```
 
-### Option B — GitHub CLI
+### GitHub CLI
 
 ```bash
 gh auth login
@@ -41,45 +108,57 @@ cd hermes-first-agent
 bash install.sh
 ```
 
-The installer asks for:
+## Installed skills
 
-1. Company name
-2. Company website (optional)
-3. Department / role (optional)
-4. Company ID / profile name
-5. Agent display name
-6. LINE Channel Access Token
-7. LINE Channel Secret
-8. LINE allowed user IDs (recommended)
-9. Public HTTPS URL (optional during initial setup)
+- `company-context`
+- `prompt-advisor`
+- `workspace-advisor`
+- `agent-planning-advisor`
+
+## Agent planning boundary
+
+The First Agent may recommend a future specialist agent and produce a build specification including naming, scope, Skills, Tool/MCP requirements, permissions, data sources, and constraints.
+
+Actual creation or deployment belongs to an administrative/development path such as:
+
+- Atlas / Hermes management interface
+- Codex
+- Claude Code
+- another approved engineering workflow
+
+The First Agent itself must not create, modify, deploy, route to, grant permissions to, or attach credentials to another agent.
+
+## LINE credential storage
 
 LINE secrets are written to:
 
 ```text
-~/.hermes/profiles/<profile>/.env
+~/.hermes/profiles/<agent-id>/.env
 ```
 
 with file mode `600`. They are never stored in this repository.
 
 ## Direct Hermes distribution install
 
-The repo is also a valid Hermes Profile Distribution:
+The repository remains a valid Hermes Profile Distribution. For example:
 
 ```bash
-hermes profile install git@github.com:cerjary/hermes-first-agent.git --name company-xx-agent --alias
+hermes profile install git@github.com:cerjary/hermes-first-agent.git --name acme-ai-advisor --alias
 ```
 
-For the company-specific onboarding flow and LINE credential prompts, use `bash install.sh` rather than the raw distribution install.
+For the normal onboarding and naming flow, use `bash install.sh` instead.
 
 ## LINE webhook
 
-Hermes LINE's default webhook listener is port `8646` and the webhook path is:
+Default listener port: `8646`
+
+Webhook path:
 
 ```text
 /line/webhook
 ```
 
-For production, expose the gateway using a fixed HTTPS hostname (for example a named Cloudflare Tunnel or reverse proxy), then set this in LINE Developers Console:
+For production, expose the gateway using a fixed HTTPS hostname and configure LINE Developers Console with:
 
 ```text
 https://YOUR-HOST/line/webhook
@@ -87,29 +166,25 @@ https://YOUR-HOST/line/webhook
 
 ## Security model
 
-- Keep the GitHub repository private.
-- Give only approved users read access.
-- Prefer SSH keys or GitHub CLI authentication; do not embed GitHub PATs in install commands or scripts.
+- Keep the repository private.
+- Grant repository access only to approved users.
+- Prefer SSH keys or GitHub CLI authentication; do not embed GitHub PATs in scripts.
 - Never commit `.env`, LINE tokens, provider API keys, OAuth files, or `auth.json`.
 - Prefer `LINE_ALLOWED_USERS`; use `LINE_ALLOW_ALL_USERS=true` only temporarily during setup.
-- Each customer/agent uses its own Hermes profile.
+- Use least-privilege permissions when planning future specialist agents.
 
 ## Updating
 
-Distribution-owned files can be refreshed with:
-
 ```bash
-hermes profile update <profile-name>
+hermes profile update <agent-id>
 ```
 
-Hermes keeps user-owned state such as `.env`, memories, sessions, and credentials separate from the distribution update.
+Hermes keeps user-owned state such as `.env`, memories, sessions, and credentials separate from distribution-owned files.
 
 ## Version
 
-`0.1.0` — starter MVP.
+`0.2.0`
 
 ## Access control
 
 This repository is proprietary and intended only for users explicitly granted access by the repository owner. Do not redistribute, mirror, publish, or sublicense the installer or bundled agent templates without written permission.
-
-For customer installation, grant the customer's GitHub account **Read** access to this private repository. The customer can then authenticate with SSH or `gh auth login`, clone the repo, and run the installer. Removing repository access prevents future clones and profile updates from this source, but it does not remotely delete files already installed on the customer's machine.
