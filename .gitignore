@@ -1,0 +1,11 @@
+.env
+.env.*
+!.env.EXAMPLE
+auth.json
+*.key
+*.pem
+*.p12
+*.pfx
+.DS_Store
+__pycache__/
+*.log
