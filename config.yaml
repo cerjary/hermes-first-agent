@@ -1,0 +1,14 @@
+gateway:
+  platforms:
+    line:
+      enabled: true
+
+memory:
+  memory_enabled: true
+  user_profile_enabled: true
+
+display:
+  interim_assistant_messages: false
+  platforms:
+    line:
+      tool_progress: off
