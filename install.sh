@@ -74,9 +74,9 @@ write_env_line() {
 require_cmd hermes
 require_cmd git
 
-say "Hermes First Agent Setup v0.2.0"
+say "Hermes First Agent Setup v0.3.0"
 say "--------------------------------"
-say "This creates a Company AI Advisor. It can advise on prompts, projects, skills, tools/MCP, and future agents, but it will not create or deploy other agents."
+say "This creates a focused Company AI Advisor for company context, work-related prompts, AI work structuring, and future specialist-agent planning. It is not a general-purpose assistant and will not create or deploy other agents."
 say ""
 
 read_required "Tenant display name (company/group name)" TENANT_DISPLAY_NAME
@@ -161,7 +161,7 @@ chmod 600 "$ENV_FILE"
 cat > "$PROFILE_HOME/memories/USER.md" <<EOF_USER
 User context from First Agent onboarding:
 - Department or role: ${USER_ROLE:-Not provided}
-- This user may ask for direct assistance, prompt improvement, workspace/project guidance, tool/MCP recommendations, or planning advice for future specialist agents.
+- This advisor is limited to company context, work-related prompt guidance, AI work structuring, Tool/MCP recommendations, and planning advice for future specialist agents.
 EOF_USER
 
 cat > "$PROFILE_HOME/memories/MEMORY.md" <<EOF_MEMORY
