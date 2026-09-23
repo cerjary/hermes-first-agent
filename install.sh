@@ -48,10 +48,15 @@ read_secret() {
   printf -v "$var_name" '%s' "$value"
 }
 
-slugify() {
+normalize_code() {
   printf '%s' "$1" \
     | tr '[:upper:]' '[:lower:]' \
-    | sed -E 's/[^a-z0-9]+/-/g; s/^-+//; s/-+$//; s/-+/-/g'
+    | sed -E 's/[[:space:]_]+/-/g; s/[^a-z0-9-]+//g; s/^-+//; s/-+$//; s/-+/-/g'
+}
+
+validate_code() {
+  local label="$1" value="$2"
+  [[ "$value" =~ ^[a-z0-9]+(-[a-z0-9]+)*$ ]] || die "$label must use lowercase letters, numbers, and single hyphens only."
 }
 
 check_single_line() {
@@ -69,29 +74,54 @@ write_env_line() {
 require_cmd hermes
 require_cmd git
 
-say "Hermes First Agent Setup"
-say "------------------------"
-read_required "Company name" COMPANY_NAME
-read_optional "Company website (optional)" "" COMPANY_WEBSITE
+say "Hermes First Agent Setup v0.2.0"
+say "--------------------------------"
+say "This creates a Company AI Advisor. It can advise on prompts, projects, skills, tools/MCP, and future agents, but it will not create or deploy other agents."
+say ""
+
+read_required "Tenant display name (company/group name)" TENANT_DISPLAY_NAME
+read_required "Tenant code (example: skg, acme)" TENANT_CODE_RAW
+TENANT_CODE="$(normalize_code "$TENANT_CODE_RAW")"
+validate_code "Tenant code" "$TENANT_CODE"
+
+printf 'Does this tenant have multiple businesses/products? [y/N]: '
+IFS= read -r MULTI_BUSINESS_ANSWER
+BUSINESS_CODE=""
+BUSINESS_DISPLAY_NAME=""
+case "$MULTI_BUSINESS_ANSWER" in
+  y|Y|yes|YES)
+    read_required "Business/product display name" BUSINESS_DISPLAY_NAME
+    read_required "Business code (example: soocker, nextoa, shopline)" BUSINESS_CODE_RAW
+    BUSINESS_CODE="$(normalize_code "$BUSINESS_CODE_RAW")"
+    validate_code "Business code" "$BUSINESS_CODE"
+    ;;
+  *)
+    BUSINESS_DISPLAY_NAME="$TENANT_DISPLAY_NAME"
+    ;;
+esac
+
+read_optional "Company/business website (optional)" "" COMPANY_WEBSITE
 read_optional "Your department / role (optional)" "" USER_ROLE
 
-DEFAULT_SLUG="$(slugify "$COMPANY_NAME")"
-[ -n "$DEFAULT_SLUG" ] || DEFAULT_SLUG="company"
-read_optional "Company ID" "$DEFAULT_SLUG" COMPANY_ID
-COMPANY_ID="$(slugify "$COMPANY_ID")"
-[ -n "$COMPANY_ID" ] || die "Company ID is invalid"
-
-read_optional "Agent display name" "$COMPANY_NAME AI Assistant" AGENT_DISPLAY_NAME
-read_optional "Hermes profile name" "${COMPANY_ID}-agent" PROFILE_NAME
-PROFILE_NAME="$(slugify "$PROFILE_NAME")"
-[ -n "$PROFILE_NAME" ] || die "Profile name is invalid"
-
-PROFILE_HOME="$HERMES_ROOT/profiles/$PROFILE_NAME"
-if [ -e "$PROFILE_HOME" ]; then
-  die "Profile already exists: $PROFILE_NAME ($PROFILE_HOME). Choose another name or remove it explicitly first."
+if [ -n "$BUSINESS_CODE" ]; then
+  AGENT_ID="${TENANT_CODE}-${BUSINESS_CODE}-ai-advisor"
+else
+  AGENT_ID="${TENANT_CODE}-ai-advisor"
 fi
+AGENT_DISPLAY_NAME="${BUSINESS_DISPLAY_NAME} AI Advisor"
+PROFILE_NAME="$AGENT_ID"
+PROFILE_HOME="$HERMES_ROOT/profiles/$PROFILE_NAME"
 
 say ""
+say "Agent naming preview"
+say "  Agent ID:     $AGENT_ID"
+say "  Display name: $AGENT_DISPLAY_NAME"
+say ""
+
+if [ -e "$PROFILE_HOME" ]; then
+  die "Profile already exists: $PROFILE_NAME ($PROFILE_HOME). Choose another tenant/business code or remove it explicitly first."
+fi
+
 say "LINE credentials"
 read_secret "LINE Channel Access Token" LINE_CHANNEL_ACCESS_TOKEN
 read_secret "LINE Channel Secret" LINE_CHANNEL_SECRET
@@ -129,17 +159,22 @@ fi
 chmod 600 "$ENV_FILE"
 
 cat > "$PROFILE_HOME/memories/USER.md" <<EOF_USER
-Name/role context from onboarding:
+User context from First Agent onboarding:
 - Department or role: ${USER_ROLE:-Not provided}
-- Prefers this assistant to help with direct answers, prompt improvement, and deciding when work should move to a new chat, project/workspace, skill, specialist agent, or integration.
+- This user may ask for direct assistance, prompt improvement, workspace/project guidance, tool/MCP recommendations, or planning advice for future specialist agents.
 EOF_USER
 
 cat > "$PROFILE_HOME/memories/MEMORY.md" <<EOF_MEMORY
-Company seed context from onboarding:
-- Company: $COMPANY_NAME
-- Company website: ${COMPANY_WEBSITE:-Not provided}
+Organization seed context from First Agent onboarding:
+- Tenant display name: $TENANT_DISPLAY_NAME
+- Tenant code: $TENANT_CODE
+- Business/product display name: ${BUSINESS_DISPLAY_NAME:-Not applicable}
+- Business code: ${BUSINESS_CODE:-Not applicable}
+- Company/business website: ${COMPANY_WEBSITE:-Not provided}
+- Agent ID: $AGENT_ID
 - Agent display name: $AGENT_DISPLAY_NAME
-- This is seed context only. For company-specific facts not already known, verify public information from official sources or request internal source material instead of guessing.
+- Agent role: Company AI Advisor
+- This is seed context only. Verify public company facts from official sources when tools are available; never invent internal facts.
 EOF_MEMORY
 
 chmod 600 "$PROFILE_HOME/memories/USER.md" "$PROFILE_HOME/memories/MEMORY.md"
@@ -154,12 +189,13 @@ fi
 
 say ""
 say "Setup complete"
-say "  Profile: $PROFILE_NAME"
-say "  Home:    $PROFILE_HOME"
-say "  Health:  $HEALTH"
+say "  Agent ID: $AGENT_ID"
+say "  Profile:  $PROFILE_NAME"
+say "  Home:     $PROFILE_HOME"
+say "  Health:   $HEALTH"
 say ""
 say "Next steps:"
-say "  1. Test: hermes -p $PROFILE_NAME chat -q \"你好，請介紹你可以怎麼幫我\""
+say "  1. Test: hermes -p $PROFILE_NAME chat -q \"請介紹你可以怎麼協助公司使用 AI\""
 say "  2. Start LINE gateway: hermes -p $PROFILE_NAME gateway"
 say "  3. For persistent service: hermes -p $PROFILE_NAME gateway install"
 say "  4. LINE webhook path: /line/webhook (default port 8646)"
