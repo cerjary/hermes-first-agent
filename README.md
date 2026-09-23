@@ -2,18 +2,38 @@
 
 Private starter distribution for creating an organization's first Hermes **Company AI Advisor** with LINE connectivity.
 
+## Version
+
+`0.3.0 — Focused Company AI Advisor`
+
 ## Role
 
-The First Agent is intentionally not an Agent Router and not an Agent Builder.
+The First Agent is a focused AI adoption advisor for the organization. It is **not** a general-purpose assistant, **not** an Agent Router, and **not** an Agent Builder.
 
-It provides four practical capabilities:
+It handles four areas only:
 
-- General Assistant — answer useful day-to-day questions directly.
-- Prompt Advisor — improve prompts when doing so materially helps.
-- Workspace Advisor — recommend current chat vs new chat vs project/workspace vs Skill vs Tool/MCP.
-- Agent Planning Advisor — recommend and specify a future specialist agent, but never create, deploy, modify, dispatch, or grant permissions to one.
+1. **Company Context** — understand the tenant/business using onboarding data, official public information, user-provided files, and approved connected sources.
+2. **Prompt Advisor** — help users improve work-related prompts when better prompting materially improves the result.
+3. **AI Work Advisor** — recommend whether an AI-related work request belongs in the current chat, a new chat, a project/workspace, a reusable Skill, or a Tool/MCP integration.
+4. **Agent Planning Advisor** — recommend and specify a future specialist agent, but never create, deploy, modify, dispatch, configure, or grant permissions to one.
 
-It can also build lightweight company context over time from onboarding data, official public information, user-provided documents, and connected sources. It is not intended to become a dedicated company knowledge agent.
+## Scope boundary
+
+The First Agent must not perform unrelated general-purpose tasks simply because an LLM can do them.
+
+Examples of **out-of-scope execution** include:
+
+- writing a Hello World program
+- building a game
+- doing unrelated translation
+- writing general marketing copy
+- solving unrelated math exercises
+- acting as a legal, finance, HR, procurement, engineering, or other specialist
+
+If an out-of-scope request can be reframed as an AI adoption/workflow question, the First Agent may help with that planning. For example:
+
+- "Build me a game." -> do not build the game.
+- "Our team repeatedly builds game demos with AI. Should this be a Project, Skill, Tool/MCP, or specialist agent?" -> in scope.
 
 ## Naming practice
 
@@ -108,16 +128,16 @@ cd hermes-first-agent
 bash install.sh
 ```
 
-## Installed skills
+## Installed Skills
 
 - `company-context`
 - `prompt-advisor`
-- `workspace-advisor`
+- `ai-work-advisor`
 - `agent-planning-advisor`
 
 ## Agent planning boundary
 
-The First Agent may recommend a future specialist agent and produce a build specification including naming, scope, Skills, Tool/MCP requirements, permissions, data sources, and constraints.
+The First Agent may recommend a future specialist agent and produce an implementation brief including naming, scope, Skills, Tool/MCP requirements, permissions, data sources, constraints, and suggested implementation path.
 
 Actual creation or deployment belongs to an administrative/development path such as:
 
@@ -126,7 +146,7 @@ Actual creation or deployment belongs to an administrative/development path such
 - Claude Code
 - another approved engineering workflow
 
-The First Agent itself must not create, modify, deploy, route to, grant permissions to, or attach credentials to another agent.
+The First Agent itself must not create, modify, deploy, dispatch to, configure, grant permissions to, or attach credentials to another agent.
 
 ## LINE credential storage
 
@@ -180,10 +200,6 @@ hermes profile update <agent-id>
 ```
 
 Hermes keeps user-owned state such as `.env`, memories, sessions, and credentials separate from distribution-owned files.
-
-## Version
-
-`0.2.0`
 
 ## Access control
 
