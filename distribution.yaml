@@ -1,6 +1,6 @@
 name: first-agent
-version: 0.2.0
-description: "Private Hermes Company AI Advisor starter profile with LINE, prompt/workspace guidance, company context, and specialist-agent planning."
+version: 0.3.0
+description: "Focused Hermes Company AI Advisor for company context, prompt guidance, AI work structuring, and specialist-agent planning."
 hermes_requires: ">=0.12.0"
 author: "cerjary"
 license: "Proprietary"
