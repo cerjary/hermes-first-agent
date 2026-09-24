@@ -1,21 +1,30 @@
 name: first-agent
-version: 0.3.0
-description: "Focused Hermes Company AI Advisor for company context, prompt guidance, AI work structuring, and specialist-agent planning."
+version: 0.4.0
+description: "Focused Hermes Company AI Advisor with multi-gateway installation and lifecycle scripts."
 hermes_requires: ">=0.12.0"
 author: "cerjary"
 license: "Proprietary"
 env_requires:
   - name: LINE_CHANNEL_ACCESS_TOKEN
-    description: "LINE Messaging API long-lived channel access token"
-    required: true
+    description: "LINE Messaging API long-lived channel access token; required only when LINE is selected"
+    required: false
   - name: LINE_CHANNEL_SECRET
-    description: "LINE Messaging API channel secret"
-    required: true
+    description: "LINE Messaging API channel secret; required only when LINE is selected"
+    required: false
   - name: LINE_ALLOWED_USERS
     description: "Comma-separated LINE user IDs allowed to use the agent"
     required: false
   - name: LINE_PUBLIC_URL
-    description: "Public HTTPS base URL for LINE webhook/media, e.g. https://agent.example.com"
+    description: "Public HTTPS base URL for LINE webhook/media"
+    required: false
+  - name: TELEGRAM_BOT_TOKEN
+    description: "Telegram bot token from BotFather; required only when Telegram is selected"
+    required: false
+  - name: TELEGRAM_ALLOWED_USERS
+    description: "Comma-separated Telegram user IDs allowed to use the agent"
+    required: false
+  - name: WEIXIN_ACCOUNT_ID
+    description: "Weixin account ID created by Hermes native QR setup"
     required: false
 
 distribution_owned:
