@@ -40,21 +40,30 @@ if command -v hermes >/dev/null 2>&1; then
     warn "Could not determine Hermes semantic version from: ${RAW_VERSION:-unknown}"
   fi
 
-  if hermes doctor >/tmp/hermes-first-agent-doctor.$ 2>&1; then
+  DOCTOR_TMP="$(mktemp "${TMPDIR:-/tmp}/hermes-first-agent-doctor.XXXXXX")"
+  CHAT_TMP="$(mktemp "${TMPDIR:-/tmp}/hermes-first-agent-chat.XXXXXX")"
+  chmod 600 "$DOCTOR_TMP" "$CHAT_TMP"
+  cleanup_tmp() {
+    rm -f "$DOCTOR_TMP" "$CHAT_TMP"
+  }
+  trap cleanup_tmp EXIT INT TERM
+
+  if hermes doctor >"$DOCTOR_TMP" 2>&1; then
     pass "Hermes doctor passed"
   else
     fail "Hermes doctor reported a problem"
-    sed 's/^/        /' /tmp/hermes-first-agent-doctor.$ 2>/dev/null || true
+    sed 's/^/        /' "$DOCTOR_TMP" 2>/dev/null || true
   fi
-  rm -f /tmp/hermes-first-agent-doctor.$
 
-  if hermes chat -q "Reply only: OK" >/tmp/hermes-first-agent-chat.$ 2>&1; then
+  if hermes chat -q "Reply only: OK" >"$CHAT_TMP" 2>&1; then
     pass "Hermes can reach the configured LLM"
   else
     fail "Hermes could not complete a minimal LLM test call"
-    sed 's/^/        /' /tmp/hermes-first-agent-chat.$ 2>/dev/null || true
+    sed 's/^/        /' "$CHAT_TMP" 2>/dev/null || true
   fi
-  rm -f /tmp/hermes-first-agent-chat.$
+
+  cleanup_tmp
+  trap - EXIT INT TERM
 fi
 
 if [ -d "$HERMES_ROOT" ]; then
