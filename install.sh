@@ -2,7 +2,6 @@
 set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 HERMES_ROOT="${HERMES_HOME:-$HOME/.hermes}"
-VERSION="$(tr -d '[:space:]' < "$SCRIPT_DIR/VERSION")"
 CREATED_PROFILE=""
 say(){ printf '%s\n' "$*"; }
 die(){ printf 'ERROR: %s\n' "$*" >&2; exit 1; }
@@ -27,6 +26,7 @@ ask_allow_all(){ local label="$1" var="$2" a=""; printf 'No %s allowlist supplie
 [ -f "$SCRIPT_DIR/check-environment.sh" ] || die "check-environment.sh not found"
 say "Running environment preflight..."
 bash "$SCRIPT_DIR/check-environment.sh" || die "Environment preflight failed"
+VERSION="$(tr -d '[:space:]' < "$SCRIPT_DIR/VERSION")"
 
 say ""
 say "Hermes First Agent Setup v$VERSION"
