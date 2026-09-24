@@ -1,7 +1,7 @@
 name: first-agent
-version: 0.4.0
-description: "Focused Hermes Company AI Advisor with multi-gateway installation and lifecycle scripts."
-hermes_requires: ">=0.12.0"
+version: 0.5.0
+description: "Focused Hermes Company AI Advisor with default-LLM inheritance, topology-aware messaging, and hardened lifecycle management."
+hermes_requires: ">=0.21.0"
 author: "cerjary"
 license: "Proprietary"
 env_requires:
@@ -14,8 +14,14 @@ env_requires:
   - name: LINE_ALLOWED_USERS
     description: "Comma-separated LINE user IDs allowed to use the agent"
     required: false
+  - name: LINE_ALLOW_ALL_USERS
+    description: "Temporary LINE allow-all switch; prefer an allowlist"
+    required: false
   - name: LINE_PUBLIC_URL
-    description: "Public HTTPS base URL for LINE webhook/media"
+    description: "Public HTTPS base URL for LINE webhook/media; may be configured after installation"
+    required: false
+  - name: LINE_PORT
+    description: "Standalone LINE listener port; automatically selected when required"
     required: false
   - name: TELEGRAM_BOT_TOKEN
     description: "Telegram bot token from BotFather; required only when Telegram is selected"
@@ -23,8 +29,17 @@ env_requires:
   - name: TELEGRAM_ALLOWED_USERS
     description: "Comma-separated Telegram user IDs allowed to use the agent"
     required: false
+  - name: TELEGRAM_ALLOW_ALL_USERS
+    description: "Temporary Telegram allow-all switch; prefer an allowlist"
+    required: false
   - name: WEIXIN_ACCOUNT_ID
-    description: "Weixin account ID created by Hermes native QR setup"
+    description: "Weixin iLink account ID created by Hermes native QR setup"
+    required: false
+  - name: WEIXIN_TOKEN
+    description: "Weixin iLink token created by Hermes native QR setup"
+    required: false
+  - name: WEIXIN_DM_POLICY
+    description: "Weixin direct-message access policy; pairing or allowlist is recommended"
     required: false
 
 distribution_owned:

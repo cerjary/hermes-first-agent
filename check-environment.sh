@@ -1,13 +1,23 @@
 #!/usr/bin/env bash
 set -u
+
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 HERMES_ROOT="${HERMES_HOME:-$HOME/.hermes}"
-MIN_HERMES_VERSION="0.12.0"
+MIN_HERMES_VERSION="0.21.0"
 PASS_COUNT=0; WARN_COUNT=0; FAIL_COUNT=0
+DOCTOR_TMP=""; CHAT_TMP=""
+
 pass(){ printf 'âœ“ PASS  %s\n' "$1"; PASS_COUNT=$((PASS_COUNT+1)); }
 warn(){ printf '! WARN  %s\n' "$1"; WARN_COUNT=$((WARN_COUNT+1)); }
 fail(){ printf 'âœ— FAIL  %s\n' "$1"; FAIL_COUNT=$((FAIL_COUNT+1)); }
 check_command(){ if command -v "$1" >/dev/null 2>&1; then pass "$2"; else fail "$2 â€” command not found: $1"; fi; }
+
+cleanup_tmp(){
+  if [ -n "$DOCTOR_TMP" ]; then rm -f "$DOCTOR_TMP" 2>/dev/null || true; fi
+  if [ -n "$CHAT_TMP" ]; then rm -f "$CHAT_TMP" 2>/dev/null || true; fi
+}
+trap cleanup_tmp EXIT INT TERM
+
 version_ge(){
   local a b c x y z
   IFS=. read -r a b c <<EOFV
@@ -20,11 +30,42 @@ EOFV
   (( a > x )) || { (( a == x && b > y )) || { (( a == x && b == y && c >= z )); }; }
 }
 
+find_hermes_install_dir(){
+  local raw dir
+  raw="$(hermes --version 2>/dev/null || true)"
+  dir="$(printf '%s\n' "$raw" | sed -n 's/^Install directory:[[:space:]]*//p' | head -n 1)"
+  if [ -n "$dir" ] && [ -d "$dir" ]; then
+    printf '%s\n' "$dir"
+    return 0
+  fi
+  if [ -d "$HERMES_ROOT/hermes-agent" ]; then
+    printf '%s\n' "$HERMES_ROOT/hermes-agent"
+    return 0
+  fi
+  return 1
+}
+
+find_hermes_python(){
+  local install_dir="$1" candidate
+  for candidate in "$install_dir/venv/bin/python" "$install_dir/.venv/bin/python"; do
+    if [ -x "$candidate" ] && "$candidate" -c 'import yaml' >/dev/null 2>&1; then
+      printf '%s\n' "$candidate"
+      return 0
+    fi
+  done
+  if command -v python3 >/dev/null 2>&1 && python3 -c 'import yaml' >/dev/null 2>&1; then
+    command -v python3
+    return 0
+  fi
+  return 1
+}
+
 echo "Hermes First Agent â€” Environment Check"
 echo "--------------------------------------"
 check_command bash "Bash is available"
 check_command git "Git is installed"
 check_command curl "curl is installed"
+check_command mktemp "mktemp is available"
 check_command hermes "Hermes Agent is installed"
 
 if command -v hermes >/dev/null 2>&1; then
@@ -33,74 +74,23 @@ if command -v hermes >/dev/null 2>&1; then
   if [ -n "$DETECTED_VERSION" ]; then
     if version_ge "$DETECTED_VERSION" "$MIN_HERMES_VERSION"; then
       pass "Hermes version $DETECTED_VERSION satisfies >= $MIN_HERMES_VERSION"
+      case "$DETECTED_VERSION" in
+        0.21.*) pass "Hermes $DETECTED_VERSION is in the v0.5 supported 0.21.x compatibility line";;
+        *) warn "Hermes $DETECTED_VERSION is newer than the v0.5 tested 0.21.x compatibility line; verify gateway topology during install";;
+      esac
     else
       fail "Hermes $DETECTED_VERSION is too old; require >= $MIN_HERMES_VERSION"
     fi
   else
-    warn "Could not determine Hermes semantic version from: ${RAW_VERSION:-unknown}"
+    fail "Could not determine Hermes semantic version from: ${RAW_VERSION:-unknown}"
   fi
 
-  DOCTOR_TMP="$(mktemp "${TMPDIR:-/tmp}/hermes-first-agent-doctor.XXXXXX")"
-  CHAT_TMP="$(mktemp "${TMPDIR:-/tmp}/hermes-first-agent-chat.XXXXXX")"
-  chmod 600 "$DOCTOR_TMP" "$CHAT_TMP"
-  cleanup_tmp() {
-    rm -f "$DOCTOR_TMP" "$CHAT_TMP"
-  }
-  trap cleanup_tmp EXIT INT TERM
+  HERMES_INSTALL_DIR="$(find_hermes_install_dir || true)"
+  if [ -n "$HERMES_INSTALL_DIR" ]; then
+    pass "Hermes install directory detected: $HERMES_INSTALL_DIR"
+    HERMES_PYTHON="$(find_hermes_python "$HERMES_INSTALWÑTˆˆYJH‚ˆYˆÈ[ˆ‰T“QT×ÔUÓˆˆNÈ[‚ˆ\ÜÈ”]ÛˆÚ]VPSS\È]˜Z[X›H›Üˆš\œİYÙ[Y™XŞXÛH[\œÈ‚ˆ[ÙBˆ˜Z[Ø[››İš[™]ÛˆÚ]VPSS›Üˆš\œİYÙ[Y™XŞXÛH[\œÈ‚ˆšBˆ[ÙBˆ˜Z[Ø[››İ]\›Z[™H\›Y\È[œİ[\™XİÜH‚ˆšB‚ˆĞÕÔ—ÕTH‰
+Zİ[\‰ÕTT‹Kİ\KÚ\›Y\ËYš\œİXYÙ[YØİÜ‹–ŠH‚ˆÒUÕTH‰
+Zİ[\‰ÕTT‹Kİ\KÚ\›Y\ËYš\œİXYÙ[XÚ]–ŠH‚ˆÚ[ÙŒ‰ĞÕÔ—ÕTˆ‰ÒUÕT‚‚ˆYˆ\›Y\È\Y˜][ØİÜˆˆ‰ĞÕÔ—ÕTˆ‰ŒNÈ[‚ˆ\ÜÈ’\›Y\ÈØİÜˆ\ÜÙY‚ˆ[ÙBˆØ\›ˆ’\›Y\ÈØİÜˆ™\ÜY[œ™\ÛÛ™Y][\ÎÈ™]šY]È™Y›Ü™Hİ\İÛY\ˆ\Ş[Y[‚ˆÙY	ÜË×‹ÈÉÈ‰ĞÕÔ—ÕTˆ‹Ù]‹Û[YBˆšB‚ˆYˆ\›Y\È\Y˜][Ú]\H”™\HÛ›NˆÒÈˆˆ‰ÒUÕTˆ‰ŒNÈ[‚ˆ\ÜÈ‘Y˜][\›Y\È›Ùš[HØ[ˆ™XXÚ]ÈÛÛ™šYİ\™YH‚ˆ[ÙBˆ˜Z[‘Y˜][\›Y\È›Ùš[HÛİ[›İÛÛ\]HHZ[š[X[H\İØ[‚ˆÙY	ÜË×‹ÈÉÈ‰ÒUÕTˆ‹Ù]‹Û[YBˆšB™šB‚šYˆÈY‰T“QT×Ô“ÓÕˆNÈ[‚ˆÈ]È‰T“QT×Ô“ÓÕˆH	‰ˆ\ÜÈ’\›Y\ÈÛYH\ÈÜš]X›Nˆ	T“QT×Ô“ÓÕˆ˜Z[’\›Y\ÈÛYH\È›İÜš]X›Nˆ	T“QT×Ô“ÓÕ‚™[ÙBˆÈ]È‰ÓQHˆH	‰ˆ\ÜÈ’\›Y\ÈÛYHØ[ˆ™HÜ™X]Yˆ	T“QT×Ô“ÓÕˆ˜Z[Ø[››İÜ™X]H\›Y\ÈÛYH[™\ˆ	ÓQH‚™šB‚”‘TURT‘QÑ’STÏH”ÓÕS›YÛÛ™šYËX[[\İšX][Û‹X[[‘T”ÒSÓˆ[œİ[œÚ\]KœÚ[š[œİ[œÚØÜš\ËÙš\œİXYÙ[Z[\‹œHÚÚ[ËØÛÛ\[KXÛÛ^ÔÒÒS›YÚÚ[ËÜ›Û\XYš\ÛÜ‹ÔÒÒS›YÚÚ[ËØZK]ÛÜšËXYš\ÛÜ‹ÔÒÒS›YÚÚ[ËØYÙ[\[›š[™ËXYš\ÛÜ‹ÔÒÒS›Y‚“RTÔÒS‘ÏL™›Üˆˆ[ˆ	‘TURT‘QÑ’STÎÈÂˆYˆÈHYˆ‰ĞÔ’TÑT‹ÉˆˆNÈ[‚ˆ˜Z[“Z\ÜÚ[™ÈXÚØYÙHš[Nˆ	ˆ‚ˆRTÔÒS‘ÏI
 
-  if hermes doctor >"$DOCTOR_TMP" 2>&1; then
-    pass "Hermes doctor passed"
-  else
-    fail "Hermes doctor reported a problem"
-    sed 's/^/        /' "$DOCTOR_TMP" 2>/dev/null || true
-  fi
-
-  if hermes chat -q "Reply only: OK" >"$CHAT_TMP" 2>&1; then
-    pass "Hermes can reach the configured LLM"
-  else
-    fail "Hermes could not complete a minimal LLM test call"
-    sed 's/^/        /' "$CHAT_TMP" 2>/dev/null || true
-  fi
-
-  cleanup_tmp
-  trap - EXIT INT TERM
-fi
-
-if [ -d "$HERMES_ROOT" ]; then
-  [ -w "$HERMES_ROOT" ] && pass "Hermes home is writable: $HERMES_ROOT" || fail "Hermes home is not writable: $HERMES_ROOT"
-else
-  [ -w "$HOME" ] && pass "Hermes home can be created: $HERMES_ROOT" || fail "Cannot create Hermes home under: $HOME"
-fi
-
-REQUIRED_FILES="SOUL.md config.yaml distribution.yaml VERSION install.sh skills/company-context/SKILL.md skills/prompt-advisor/SKILL.md skills/ai-work-advisor/SKILL.md skills/agent-planning-advisor/SKILL.md"
-MISSING=0
-for f in $REQUIRED_FILES; do
-  if [ ! -f "$SCRIPT_DIR/$f" ]; then fail "Missing package file: $f"; MISSING=$((MISSING+1)); fi
-done
-[ "$MISSING" -eq 0 ] && pass "First Agent package is complete"
-
-if git -C "$SCRIPT_DIR" rev-parse --is-inside-work-tree >/dev/null 2>&1; then
-  pass "Repository is a valid Git working tree"
-  REMOTE_URL="$(git -C "$SCRIPT_DIR" remote get-url origin 2>/dev/null || true)"
-  if [ -n "$REMOTE_URL" ]; then
-    pass "Git remote is configured"
-    if GIT_TERMINAL_PROMPT=0 git -C "$SCRIPT_DIR" ls-remote --exit-code origin HEAD >/dev/null 2>&1; then
-      pass "Private repository access verified"
-    else
-      warn "Cannot verify remote repository access; future updates may fail"
-    fi
-  else
-    warn "No Git remote named origin is configured"
-  fi
-else
-  warn "This package is not running from a Git working tree"
-fi
-
-echo ""
-echo "Summary: PASS=$PASS_COUNT WARN=$WARN_COUNT FAIL=$FAIL_COUNT"
-if [ "$FAIL_COUNT" -gt 0 ]; then
-  echo "Environment is NOT ready. Fix all FAIL items before installation."
-  exit 1
-fi
-echo "Environment is ready."
-exit 0
+RTÔÒS‘ÊÌJJBˆšB™Û™B–È‰RTÔÒS‘ÈˆY\HH	‰ˆ\ÜÈ‘š\œİYÙ[XÚØYÙH\ÈÛÛ\]H‚‚šYˆÚ]PÈ‰ĞÔ’TÑTˆˆ™]‹\\œÙHKZ\ËZ[œÚYK]ÛÜšË]™YH‹Ù]‹Û[‰ŒNÈ[‚ˆ\ÜÈ”™\ÜÚ]ÜH\ÈH˜[YÚ]ÛÜšÚ[™È™YH‚ˆ‘SSÕWÕT“H‰
+Ú]PÈ‰ĞÔ’TÑTˆˆ™[[İHÙ]]\›ÜšYÚ[ˆ‹Ù]‹Û[YJH‚ˆYˆÈ[ˆ‰‘SSÕWÕT“ˆNÈ[‚ˆ\ÜÈ‘Ú]™[[İH\ÈÛÛ™šYİ\™Y‚ˆYˆÒUÕT“RSSÔ“ÓTLÚ]PÈ‰ĞÔ’TÑTˆˆË\™[[İHKY^]XÛÙHÜšYÚ[ˆPQ‹Ù]‹Û[‰ŒNÈ[‚ˆ\ÜÈ”š]˜]H™\ÜÚ]ÜHXØÙ\ÜÈ™\šYšYY‚ˆ[ÙBˆØ\›ˆØ[››İ™\šYH™[[İH™\ÜÚ]ÜHXØÙ\ÜÈ›Ùš[H[œİ[İ\]Hœ›ÛHHš]˜]H™[[İHX^H˜Z[‚ˆšBˆ[ÙBˆØ\›ˆ“›ÈÚ]™[[İH˜[YYÜšYÚ[ˆ\ÈÛÛ™šYİ\™YÈ[œİ[\ˆÚ[\ÙHHØØ[ÚXÚÛİ]\È\İšX][ÛˆÛİ\˜ÙH‚ˆšB™[ÙBˆØ\›ˆ•\ÈXÚØYÙH\È›İ[›š[™Èœ›ÛHHÚ]ÛÜšÚ[™È™YH‚™šB‚™XÚÈˆ‚™XÚÈ”İ[[X\NˆTÔÏITÔ×ĞÓÕS•ĞT“IĞT“—ĞÓÕS•RSIRSĞÓÕS•‚šYˆÈ‰RSĞÓÕS•ˆYİNÈ[‚ˆXÚÈ‘[š\›Û›Y[\È“Õ™XYKˆš^[RS][\È™Y›Ü™H[œİ[][Û‹ˆ‚ˆ^]B™šB™XÚÈ‘[š\›Û›Y[\È™XYKˆĞT“ˆ][\ÈÚİ[™H™]šY]ÙY™Y›Ü™Hİ\İÛY\ˆ\Ş[Y[ˆ‚™^]

@@ -8,4 +8,7 @@ auth.json
 *.pfx
 .DS_Store
 __pycache__/
+*.pyc
 *.log
+backups/
+*.tar.gz

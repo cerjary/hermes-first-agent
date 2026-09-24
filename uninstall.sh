@@ -1,22 +1,52 @@
 #!/usr/bin/env bash
-set -euo pipefail
+set -Eeuo pipefail
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 HERMES_ROOT="${HERMES_HOME:-$HOME/.hermes}"
+HELPER="$SCRIPT_DIR/scripts/first-agent-helper.py"
+
 die(){ printf 'ERROR: %s\n' "$*" >&2; exit 1; }
+validate_agent_id(){ [[ "$1" =~ ^[a-z0-9]+(-[a-z0-9]+)*$ ]] || die "Agent ID must use lowercase letters, numbers, and single hyphens only."; }
+
+find_hermes_install_dir(){
+  local raw dir
+  raw="$(hermes --version 2>/dev/null || true)"
+  dir="$(printf '%s\n' "$raw" | sed -n 's/^Install directory:[[:space:]]*//p' | head -n 1)"
+  if [ -n "$dir" ] && [ -d "$dir" ]; then printf '%s\n' "$dir"; return 0; fi
+  if [ -d "$HERMES_ROOT/hermes-agent" ]; then printf '%s\n' "$HERMES_ROOT/hermes-agent"; return 0; fi
+  return 1
+}
+
+find_hermes_python(){
+  local install_dir="$1" candidate
+  for candidate in "$install_dir/venv/bin/python" "$install_dir/.venv/bin/python"; do
+    if [ -x "$candidate" ] && "$candidate" -c 'import yaml' >/dev/null 2>&1; then printf '%s\n' "$candidate"; return 0; fi
+  done
+  if command -v python3 >/dev/null 2>&1 && python3 -c 'import yaml' >/dev/null 2>&1; then command -v python3; return 0; fi
+  return 1
+}
+
 read -r -p "Agent ID to uninstall: " AGENT_ID
 [ -n "$AGENT_ID" ] || die "Agent ID is required"
+validate_agent_id "$AGENT_ID"
 PROFILE_HOME="$HERMES_ROOT/profiles/$AGENT_ID"
 MANIFEST="$PROFILE_HOME/FIRST_AGENT.yaml"
 [ -f "$MANIFEST" ] || die "FIRST_AGENT.yaml not found; refusing to delete a non-First-Agent profile"
-grep -q '^source: cerjary/hermes-first-agent$' "$MANIFEST" || die "Profile source does not match hermes-first-agent"
+[ -f "$HELPER" ] || die "First Agent lifecycle helper not found: $HELPER"
+
+HERMES_INSTALL_DIR="$(find_hermes_install_dir)" || die "Cannot determine Hermes install directory"
+HERMES_PYTHON="$(find_hermes_python "$HERMES_INSTALL_DIR")" || die "Cannot find Python with PyYAML"
+"$HERMES_PYTHON" "$HELPER" verify-manifest --path "$MANIFEST" --agent-id "$AGENT_ID" >/dev/null
+
 echo ""
 echo "This will permanently remove:"
-echo "  - Profile: $AGENT_ID"
+echo "  - First Agent profile: $AGENT_ID"
 echo "  - SOUL / Skills / config"
 echo "  - memories and sessions"
-echo "  - gateway credentials and profile data"
-echo "  - gateway service and shell alias managed by Hermes"
+echo "  - profile messaging credentials and data"
+echo "  - gateway service/routing managed by Hermes for this profile"
 echo ""
-echo "Hermes itself and other profiles will NOT be removed."
+echo "Hermes itself, the default profile, and other profiles will NOT be removed."
 echo ""
 echo "Backup options:"
 echo "  1) Delete without profile export"
@@ -35,12 +65,18 @@ case "$CHOICE" in
     hermes profile export "$AGENT_ID" -o "$BACKUP"
     chmod 600 "$BACKUP"
     echo "Profile export created: $BACKUP"
-    echo "Note: profile export can contain memories/session data and does not include all credentials/secrets."
+    echo "The export excludes .env and auth.json, but can contain memories, sessions, and other sensitive profile data."
     ;;
   3) echo "Cancelled."; exit 0;;
   *) die "Invalid selection";;
 esac
+
 read -r -p "Type the Agent ID '$AGENT_ID' to confirm permanent deletion: " CONFIRM
 [ "$CONFIRM" = "$AGENT_ID" ] || die "Confirmation did not match"
 hermes profile delete "$AGENT_ID" --yes
+
 echo "First Agent $AGENT_ID has been removed."
+if [ -e "$HERMES_ROOT/profiles/.deleted/$AGENT_ID" ]; then
+  echo "Hermes kept an internal deletion marker for this profile."
+  echo "The v0.5 installer detects this marker and requires explicit REINSTALL confirmation before reusing the same Agent ID."
+fi
