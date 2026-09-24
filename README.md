@@ -30,7 +30,7 @@ Recommended first step:
 bash check-environment.sh
 ```
 
-The installer runs this check again automatically. Any **FAIL** stops installation.
+The installer runs this check again automatically. Any **FAIL** stops installation. The environment check also performs one minimal LLM test call so the installer can detect a missing or unusable model/provider before creating the First Agent profile.
 
 ## 2. Prepare Tenant / Business information
 
