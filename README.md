@@ -300,7 +300,7 @@ Permanent deletion requires typing the exact Agent ID.
 
 Hermes profile deletion removes the profile data, gateway service, shell alias, memories, sessions, Skills, config, and profile credentials while preserving Hermes itself and all other profiles.
 
-> Profile export does not include every secret/credential. Use a full Hermes backup strategy when credential recovery is required.
+> Profile exports are stored under `~/.hermes/backups/first-agent/` with restrictive permissions. They can contain memories/session data and do not include every secret/credential. Use a full Hermes backup strategy when credential recovery is required.
 
 ---
 
@@ -340,6 +340,7 @@ See `NAMING.md`.
 - Prefer per-platform allowlists.
 - Treat allow-all as temporary development configuration.
 - Secrets are entered without terminal echo where practical.
+- LINE and Telegram validation sends secrets to `curl` through stdin config so tokens are not exposed in the process argument list.
 - Install manifests never contain gateway secrets.
 - The uninstall script refuses to delete unrelated Hermes profiles.
 - Future specialist-agent recommendations should follow least privilege.
