@@ -40,13 +40,21 @@ if command -v hermes >/dev/null 2>&1; then
     warn "Could not determine Hermes semantic version from: ${RAW_VERSION:-unknown}"
   fi
 
-  if hermes doctor >/tmp/hermes-first-agent-doctor.$$ 2>&1; then
+  if hermes doctor >/tmp/hermes-first-agent-doctor.$ 2>&1; then
     pass "Hermes doctor passed"
   else
     fail "Hermes doctor reported a problem"
-    sed 's/^/        /' /tmp/hermes-first-agent-doctor.$$ 2>/dev/null || true
+    sed 's/^/        /' /tmp/hermes-first-agent-doctor.$ 2>/dev/null || true
   fi
-  rm -f /tmp/hermes-first-agent-doctor.$$
+  rm -f /tmp/hermes-first-agent-doctor.$
+
+  if hermes chat -q "Reply only: OK" >/tmp/hermes-first-agent-chat.$ 2>&1; then
+    pass "Hermes can reach the configured LLM"
+  else
+    fail "Hermes could not complete a minimal LLM test call"
+    sed 's/^/        /' /tmp/hermes-first-agent-chat.$ 2>/dev/null || true
+  fi
+  rm -f /tmp/hermes-first-agent-chat.$
 fi
 
 if [ -d "$HERMES_ROOT" ]; then
