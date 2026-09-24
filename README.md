@@ -1,53 +1,56 @@
 # Hermes First Agent
 
-Private starter distribution for creating an organization's first Hermes **Company AI Advisor** with LINE connectivity.
+Private starter distribution for creating an organization's first Hermes **Company AI Advisor**.
 
 ## Version
 
-`0.3.0 — Focused Company AI Advisor`
+`0.4.0 — Multi-Gateway & Lifecycle`
 
-## Role
+The First Agent remains the focused Company AI Advisor defined in v0.3. This release adds safer installation, multiple messaging gateways, update/uninstall lifecycle support, and a first-time installation checklist.
 
-The First Agent is a focused AI adoption advisor for the organization. It is **not** a general-purpose assistant, **not** an Agent Router, and **not** an Agent Builder.
+---
 
-It handles four areas only:
+# First-Time Installation Checklist
 
-1. **Company Context** — understand the tenant/business using onboarding data, official public information, user-provided files, and approved connected sources.
-2. **Prompt Advisor** — help users improve work-related prompts when better prompting materially improves the result.
-3. **AI Work Advisor** — recommend whether an AI-related work request belongs in the current chat, a new chat, a project/workspace, a reusable Skill, or a Tool/MCP integration.
-4. **Agent Planning Advisor** — recommend and specify a future specialist agent, but never create, deploy, modify, dispatch, configure, or grant permissions to one.
+Before running `install.sh`, complete the following.
 
-## Scope boundary
+## 1. Hermes environment
 
-The First Agent must not perform unrelated general-purpose tasks simply because an LLM can do them.
+- [ ] Hermes Agent is installed.
+- [ ] At least one LLM provider/model is configured.
+- [ ] `hermes doctor` passes without blocking errors.
+- [ ] Git is installed.
+- [ ] curl is installed.
+- [ ] You have write access to the Hermes home directory.
+- [ ] You have access to this private GitHub repository.
 
-Examples of **out-of-scope execution** include:
+Recommended first step:
 
-- writing a Hello World program
-- building a game
-- doing unrelated translation
-- writing general marketing copy
-- solving unrelated math exercises
-- acting as a legal, finance, HR, procurement, engineering, or other specialist
-
-If an out-of-scope request can be reframed as an AI adoption/workflow question, the First Agent may help with that planning. For example:
-
-- "Build me a game." -> do not build the game.
-- "Our team repeatedly builds game demos with AI. Should this be a Project, Skill, Tool/MCP, or specialist agent?" -> in scope.
-
-## Naming practice
-
-Standard Agent ID:
-
-```text
-<tenant>[-<business>]-<domain>-<role>
+```bash
+bash check-environment.sh
 ```
 
-For the First Agent:
+The installer runs this check again automatically. Any **FAIL** stops installation.
+
+## 2. Prepare Tenant / Business information
+
+Have these ready:
+
+- [ ] Tenant display name
+- [ ] Tenant code
+- [ ] Whether the tenant has multiple businesses/products
+- [ ] Business display name and business code, if applicable
+- [ ] Company/business website, optional
+- [ ] User department/role, optional
+
+The installer generates the Agent ID automatically.
 
 ```text
-Single-business tenant: <tenant>-ai-advisor
-Multi-business tenant:  <tenant>-<business>-ai-advisor
+Single business:
+<tenant>-ai-advisor
+
+Multi business:
+<tenant>-<business>-ai-advisor
 ```
 
 Examples:
@@ -55,152 +58,364 @@ Examples:
 ```text
 acme-ai-advisor
 skg-soocker-ai-advisor
-skg-nextoa-ai-advisor
-skg-shopline-order-analyst
-skg-soocker-opportunity-collector
 ```
 
-See `NAMING.md` for the complete practice.
+## 3. Choose at least one Messaging Gateway
 
-## What the installer asks
+v0.4 supports:
 
-1. Tenant display name.
-2. Tenant code.
-3. Whether the tenant has multiple businesses/products.
-4. Business/product display name and code, only when needed.
-5. Website (optional).
-6. User department/role (optional).
-7. LINE Channel Access Token.
-8. LINE Channel Secret.
-9. LINE allowed user IDs (recommended).
-10. Public HTTPS URL (optional during initial setup).
+- [ ] LINE
+- [ ] Telegram
+- [ ] WeChat / Weixin
 
-The Agent ID and display name are generated automatically from the naming practice. The installer does not ask the user to invent an Agent ID.
-
-## Example
-
-Single-business company:
+You may select one or multiple gateways.
 
 ```text
-Tenant display name: Acme
-Tenant code: acme
-Multiple businesses/products? No
-
-Agent ID: acme-ai-advisor
-Display name: Acme AI Advisor
+LINE ---------┐
+Telegram -----┼----> one Company AI Advisor profile
+Weixin -------┘
 ```
 
-Multi-business group:
+**One Agent, Many Gateways, Many Sessions.**
 
-```text
-Tenant display name: Soocker Group
-Tenant code: skg
-Multiple businesses/products? Yes
-Business display name: Soocker
-Business code: soocker
+The gateways share the same Agent profile, SOUL, Skills, durable Memory, and tools. Each messaging conversation still has its own session/context.
 
-Agent ID: skg-soocker-ai-advisor
-Display name: Soocker AI Advisor
-```
+## 4. If you choose LINE
 
-## Prerequisite
+Prepare:
 
-Hermes Agent must already be installed and configured with an LLM provider.
+- [ ] LINE Developers account
+- [ ] Messaging API Channel
+- [ ] Long-lived Channel Access Token
+- [ ] Channel Secret
+- [ ] Allowed LINE user ID(s), or explicitly accept temporary allow-all
+- [ ] Public HTTPS base URL / tunnel
 
-## Private GitHub installation
+The installer validates the Channel Access Token before creating the profile.
 
-Keep this repository **Private** and grant read access only to approved GitHub users.
-
-### SSH
-
-```bash
-git clone git@github.com:cerjary/hermes-first-agent.git
-cd hermes-first-agent
-bash install.sh
-```
-
-### GitHub CLI
-
-```bash
-gh auth login
-gh repo clone cerjary/hermes-first-agent
-cd hermes-first-agent
-bash install.sh
-```
-
-## Installed Skills
-
-- `company-context`
-- `prompt-advisor`
-- `ai-work-advisor`
-- `agent-planning-advisor`
-
-## Agent planning boundary
-
-The First Agent may recommend a future specialist agent and produce an implementation brief including naming, scope, Skills, Tool/MCP requirements, permissions, data sources, constraints, and suggested implementation path.
-
-Actual creation or deployment belongs to an administrative/development path such as:
-
-- Atlas / Hermes management interface
-- Codex
-- Claude Code
-- another approved engineering workflow
-
-The First Agent itself must not create, modify, deploy, dispatch to, configure, grant permissions to, or attach credentials to another agent.
-
-## LINE credential storage
-
-LINE secrets are written to:
-
-```text
-~/.hermes/profiles/<agent-id>/.env
-```
-
-with file mode `600`. They are never stored in this repository.
-
-## Direct Hermes distribution install
-
-The repository remains a valid Hermes Profile Distribution. For example:
-
-```bash
-hermes profile install git@github.com:cerjary/hermes-first-agent.git --name acme-ai-advisor --alias
-```
-
-For the normal onboarding and naming flow, use `bash install.sh` instead.
-
-## LINE webhook
-
-Default listener port: `8646`
-
-Webhook path:
+LINE webhook path:
 
 ```text
 /line/webhook
 ```
 
-For production, expose the gateway using a fixed HTTPS hostname and configure LINE Developers Console with:
+Example:
+
+```text
+https://agent.example.com/line/webhook
+```
+
+## 5. If you choose Telegram
+
+Prepare:
+
+- [ ] Telegram account
+- [ ] Bot created through BotFather
+- [ ] Telegram Bot Token
+- [ ] Allowed Telegram numeric user ID(s), or explicitly accept temporary allow-all
+
+The installer validates the Bot Token through Telegram `getMe` before creating the profile.
+
+Telegram normally uses long polling, so a public HTTPS webhook is not required.
+
+## 6. If you choose WeChat / Weixin
+
+Prepare:
+
+- [ ] Personal WeChat account
+- [ ] Mobile phone with WeChat available for QR-code login
+
+The installer uses Hermes native:
+
+```bash
+hermes -p <agent-id> gateway setup
+```
+
+Select **Weixin** when prompted and scan the QR code.
+
+---
+
+# Installation
+
+Clone the private repository:
+
+```bash
+git clone git@github.com:cerjary/hermes-first-agent.git
+cd hermes-first-agent
+```
+
+Run the environment check:
+
+```bash
+bash check-environment.sh
+```
+
+Then install:
+
+```bash
+bash install.sh
+```
+
+## Install flow
+
+```text
+Environment Preflight
+        ↓
+Tenant / Business input
+        ↓
+Gateway selection
+        ↓
+Credential validation
+        ↓
+Installation Plan
+        ↓
+User confirmation
+        ↓
+Create Hermes Profile
+        ↓
+Write SOUL / Skills / Memory / Gateway config
+        ↓
+Weixin native QR setup, if selected
+        ↓
+Hermes doctor
+        ↓
+Agent smoke test
+```
+
+If a fatal error occurs after the profile is created, the installer attempts to remove the newly created profile so that a partial First Agent is not left behind.
+
+Existing profiles are never overwritten automatically.
+
+---
+
+# What is installed
+
+The profile receives:
+
+- `SOUL.md`
+- `company-context`
+- `prompt-advisor`
+- `ai-work-advisor`
+- `agent-planning-advisor`
+- Tenant/Business seed memory
+- Selected gateway configuration
+- Gateway credentials in the profile's private `.env`
+- `FIRST_AGENT.yaml` installation manifest
+
+Example manifest:
+
+```yaml
+source: cerjary/hermes-first-agent
+version: 0.4.0
+agent_id: skg-soocker-ai-advisor
+tenant_code: skg
+business_code: soocker
+gateways:
+  - line
+  - telegram
+```
+
+The manifest contains lifecycle metadata only. It does **not** contain gateway secrets.
+
+---
+
+# Same Agent, different Sessions
+
+A LINE message and a Telegram message may reach the same Agent, but they are not automatically one continuous conversation.
+
+```text
+Same Profile / SOUL / Skills / Memory     YES
+Same Gateway session history              NO
+```
+
+Use durable Memory for long-term organization context.
+
+Use Sessions for the working context of a particular conversation.
+
+Hermes manages context compression for long sessions, but users should still use `/new` when a task or topic is complete.
+
+---
+
+# Start the Gateway
+
+Interactive:
+
+```bash
+hermes -p <agent-id> gateway
+```
+
+Persistent service:
+
+```bash
+hermes -p <agent-id> gateway install
+```
+
+For LINE, configure the LINE Developers Console webhook using:
 
 ```text
 https://YOUR-HOST/line/webhook
 ```
 
-## Security model
+---
 
-- Keep the repository private.
-- Grant repository access only to approved users.
-- Prefer SSH keys or GitHub CLI authentication; do not embed GitHub PATs in scripts.
-- Never commit `.env`, LINE tokens, provider API keys, OAuth files, or `auth.json`.
-- Prefer `LINE_ALLOWED_USERS`; use `LINE_ALLOW_ALL_USERS=true` only temporarily during setup.
-- Use least-privilege permissions when planning future specialist agents.
+# Update an installed First Agent
 
-## Updating
+Use:
 
 ```bash
-hermes profile update <agent-id>
+bash update.sh
 ```
 
-Hermes keeps user-owned state such as `.env`, memories, sessions, and credentials separate from distribution-owned files.
+The script:
 
-## Access control
+1. verifies the target is a First Agent profile
+2. runs the environment check
+3. updates the local repository with `git pull --ff-only`
+4. runs `hermes profile update <agent-id> --yes`
+5. updates the First Agent manifest version
+
+Hermes profile update preserves user-owned state such as `.env`, memories, sessions, and credentials.
+
+Gateway configuration is also preserved unless explicitly replaced.
+
+---
+
+# Uninstall / Clean Removal
+
+Use:
+
+```bash
+bash uninstall.sh
+```
+
+The script refuses to delete profiles that do not contain a matching First Agent manifest.
+
+Before deletion you can choose:
+
+1. delete directly
+2. export the profile first
+3. cancel
+
+Permanent deletion requires typing the exact Agent ID.
+
+Hermes profile deletion removes the profile data, gateway service, shell alias, memories, sessions, Skills, config, and profile credentials while preserving Hermes itself and all other profiles.
+
+> Profile export does not include every secret/credential. Use a full Hermes backup strategy when credential recovery is required.
+
+---
+
+# Agent scope
+
+The First Agent is a focused **Company AI Advisor**, not a general-purpose assistant.
+
+It handles:
+
+1. Company Context
+2. Prompt Advisor
+3. AI Work Advisor
+4. Agent Planning Advisor
+
+It does not directly execute unrelated work such as building games, general application development, unrelated translation, homework, or domain-specialist work.
+
+It is not an Agent Router and not an Agent Builder.
+
+---
+
+# Naming practice
+
+Standard pattern:
+
+```text
+<tenant>[-<business>]-<domain>-<role>
+```
+
+See `NAMING.md`.
+
+---
+
+# Security defaults
+
+- Keep this repository private.
+- Do not commit `.env`, access tokens, API keys, OAuth files, or `auth.json`.
+- Prefer per-platform allowlists.
+- Treat allow-all as temporary development configuration.
+- Secrets are entered without terminal echo where practical.
+- Install manifests never contain gateway secrets.
+- The uninstall script refuses to delete unrelated Hermes profiles.
+- Future specialist-agent recommendations should follow least privilege.
+
+---
+
+# Troubleshooting
+
+## Environment check fails
+
+Run:
+
+```bash
+bash check-environment.sh
+```
+
+Fix every **FAIL** item before retrying.
+
+## Profile already exists
+
+The installer intentionally stops instead of overwriting it.
+
+Use one of:
+
+```bash
+bash update.sh
+bash uninstall.sh
+```
+
+## LINE token validation fails
+
+Confirm the token belongs to the intended LINE Messaging API channel and has not expired or been revoked.
+
+## Telegram token validation fails
+
+Confirm the BotFather token and regenerate it if necessary.
+
+## Weixin QR login fails
+
+Retry the Hermes native setup for the installed profile:
+
+```bash
+hermes -p <agent-id> gateway setup
+```
+
+## Gateway is installed but not responding
+
+Check:
+
+```bash
+hermes -p <agent-id> doctor
+hermes -p <agent-id> gateway
+```
+
+Then verify the selected platform's credentials, allowlist, and external webhook/network requirements.
+
+---
+
+# Direct Hermes distribution install
+
+The repository remains a valid Hermes Profile Distribution:
+
+```bash
+hermes profile install git@github.com:cerjary/hermes-first-agent.git --name acme-ai-advisor --alias
+```
+
+However, the raw command bypasses the First Agent onboarding, gateway selection, credential validation, install manifest, and lifecycle preflight.
+
+For normal customer installation, use:
+
+```bash
+bash install.sh
+```
+
+---
+
+# Access control
 
 This repository is proprietary and intended only for users explicitly granted access by the repository owner. Do not redistribute, mirror, publish, or sublicense the installer or bundled agent templates without written permission.
