@@ -26,12 +26,16 @@ read -r -p "Selection [1/2/3]: " CHOICE
 case "$CHOICE" in
   1) ;;
   2)
-    mkdir -p "./backups"
+    umask 077
+    BACKUP_DIR="$HERMES_ROOT/backups/first-agent"
+    mkdir -p "$BACKUP_DIR"
+    chmod 700 "$BACKUP_DIR"
     TS="$(date -u +'%Y%m%dT%H%M%SZ')"
-    BACKUP="./backups/${AGENT_ID}-${TS}.tar.gz"
+    BACKUP="$BACKUP_DIR/${AGENT_ID}-${TS}.tar.gz"
     hermes profile export "$AGENT_ID" -o "$BACKUP"
+    chmod 600 "$BACKUP"
     echo "Profile export created: $BACKUP"
-    echo "Note: profile export does not include all credentials/secrets."
+    echo "Note: profile export can contain memories/session data and does not include all credentials/secrets."
     ;;
   3) echo "Cancelled."; exit 0;;
   *) die "Invalid selection";;
