@@ -1,7 +1,11 @@
 gateway:
   platforms:
     line:
-      enabled: true
+      enabled: false
+    telegram:
+      enabled: false
+    weixin:
+      enabled: false
 
 memory:
   memory_enabled: true
