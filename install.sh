@@ -69,7 +69,10 @@ if [ "$SELECT_LINE" = true ]; then
   read_required "Public HTTPS base URL (example: https://agent.example.com)" LINE_PUBLIC_URL
   case "$LINE_PUBLIC_URL" in https://*) ;; *) die "LINE Public URL must start with https://";; esac
   say "Validating LINE Channel Access Token..."
-  curl -fsS -H "Authorization: Bearer $LINE_CHANNEL_ACCESS_TOKEN" https://api.line.me/v2/bot/info >/dev/null || die "LINE Channel Access Token validation failed"
+  if ! printf 'url = "https://api.line.me/v2/bot/info"\nheader = "Authorization: Bearer %s"\nsilent\nshow-error\nfail\n' "$LINE_CHANNEL_ACCESS_TOKEN" \
+    | curl --config - >/dev/null; then
+    die "LINE Channel Access Token validation failed"
+  fi
 fi
 
 if [ "$SELECT_TELEGRAM" = true ]; then
@@ -78,7 +81,10 @@ if [ "$SELECT_TELEGRAM" = true ]; then
   read_optional "Allowed Telegram user IDs, comma-separated" "" TELEGRAM_ALLOWED_USERS
   [ -n "$TELEGRAM_ALLOWED_USERS" ] || ask_allow_all "Telegram" TELEGRAM_ALLOW_ALL_USERS
   say "Validating Telegram Bot Token..."
-  TG_RESPONSE="$(curl -fsS "https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/getMe" || true)"
+  TG_RESPONSE="$(
+    printf 'url = "https://api.telegram.org/bot%s/getMe"\nsilent\nshow-error\nfail\n' "$TELEGRAM_BOT_TOKEN" \
+      | curl --config - || true
+  )"
   printf '%s' "$TG_RESPONSE" | grep -q '"ok"[[:space:]]*:[[:space:]]*true' || die "Telegram Bot Token validation failed"
 fi
 
