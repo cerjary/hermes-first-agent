@@ -33,6 +33,8 @@ check_command() {
   fi
 }
 
+# cleanup_tmp is invoked only through trap handlers; ShellCheck cannot infer that call path.
+# shellcheck disable=SC2317
 cleanup_tmp() {
   if [ -n "$DOCTOR_TMP" ]; then
     rm -f -- "$DOCTOR_TMP" 2>/dev/null || true
