@@ -1,24 +1,49 @@
 #!/usr/bin/env bash
-set -u
+set -Eeuo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 HERMES_ROOT="${HERMES_HOME:-$HOME/.hermes}"
 MIN_HERMES_VERSION="0.21.0"
-PASS_COUNT=0; WARN_COUNT=0; FAIL_COUNT=0
-DOCTOR_TMP=""; CHAT_TMP=""
+PASS_COUNT=0
+WARN_COUNT=0
+FAIL_COUNT=0
+DOCTOR_TMP=""
+CHAT_TMP=""
 
-pass(){ printf 'âœ“ PASS  %s\n' "$1"; PASS_COUNT=$((PASS_COUNT+1)); }
-warn(){ printf '! WARN  %s\n' "$1"; WARN_COUNT=$((WARN_COUNT+1)); }
-fail(){ printf 'âœ— FAIL  %s\n' "$1"; FAIL_COUNT=$((FAIL_COUNT+1)); }
-check_command(){ if command -v "$1" >/dev/null 2>&1; then pass "$2"; else fail "$2 â€” command not found: $1"; fi; }
+pass() {
+  printf 'âœ“ PASS  %s\n' "$1"
+  PASS_COUNT=$((PASS_COUNT + 1))
+}
 
-cleanup_tmp(){
-  if [ -n "$DOCTOR_TMP" ]; then rm -f "$DOCTOR_TMP" 2>/dev/null || true; fi
-  if [ -n "$CHAT_TMP" ]; then rm -f "$CHAT_TMP" 2>/dev/null || true; fi
+warn() {
+  printf '! WARN  %s\n' "$1"
+  WARN_COUNT=$((WARN_COUNT + 1))
+}
+
+fail() {
+  printf 'âœ— FAIL  %s\n' "$1"
+  FAIL_COUNT=$((FAIL_COUNT + 1))
+}
+
+check_command() {
+  if command -v "$1" >/dev/null 2>&1; then
+    pass "$2"
+  else
+    fail "$2 â€” command not found: $1"
+  fi
+}
+
+cleanup_tmp() {
+  if [ -n "$DOCTOR_TMP" ]; then
+    rm -f -- "$DOCTOR_TMP" 2>/dev/null || true
+  fi
+  if [ -n "$CHAT_TMP" ]; then
+    rm -f -- "$CHAT_TMP" 2>/dev/null || true
+  fi
 }
 trap cleanup_tmp EXIT INT TERM
 
-version_ge(){
+version_ge() {
   local a b c x y z
   IFS=. read -r a b c <<EOFV
 $1
@@ -26,11 +51,16 @@ EOFV
   IFS=. read -r x y z <<EOFV
 $2
 EOFV
-  a=${a:-0}; b=${b:-0}; c=${c:-0}; x=${x:-0}; y=${y:-0}; z=${z:-0}
-  (( a > x )) || { (( a == x && b > y )) || { (( a == x && b == y && c >= z )); }; }
+  a=${a:-0}; b=${b:-0}; c=${c:-0}
+  x=${x:-0}; y=${y:-0}; z=${z:-0}
+  (( a > x )) || {
+    (( a == x && b > y )) || {
+      (( a == x && b == y && c >= z ))
+    }
+  }
 }
 
-find_hermes_install_dir(){
+find_hermes_install_dir() {
   local raw dir
   raw="$(hermes --version 2>/dev/null || true)"
   dir="$(printf '%s\n' "$raw" | sed -n 's/^Install directory:[[:space:]]*//p' | head -n 1)"
@@ -45,7 +75,7 @@ find_hermes_install_dir(){
   return 1
 }
 
-find_hermes_python(){
+find_hermes_python() {
   local install_dir="$1" candidate
   for candidate in "$install_dir/venv/bin/python" "$install_dir/.venv/bin/python"; do
     if [ -x "$candidate" ] && "$candidate" -c 'import yaml' >/dev/null 2>&1; then
@@ -60,8 +90,24 @@ find_hermes_python(){
   return 1
 }
 
+origin_matches_expected_repo() {
+  local remote="$1"
+  case "$remote" in
+    git@github.com:cerjary/hermes-first-agent.git|\
+    git@github.com:cerjary/hermes-first-agent|\
+    https://github.com/cerjary/hermes-first-agent.git|\
+    https://github.com/cerjary/hermes-first-agent)
+      return 0
+      ;;
+    *)
+      return 1
+      ;;
+  esac
+}
+
 echo "Hermes First Agent â€” Environment Check"
 echo "--------------------------------------"
+
 check_command bash "Bash is available"
 check_command git "Git is installed"
 check_command curl "curl is installed"
@@ -71,12 +117,17 @@ check_command hermes "Hermes Agent is installed"
 if command -v hermes >/dev/null 2>&1; then
   RAW_VERSION="$(hermes --version 2>/dev/null | head -n 1 || true)"
   DETECTED_VERSION="$(printf '%s' "$RAW_VERSION" | grep -Eo '[0-9]+\.[0-9]+\.[0-9]+' | head -n 1 || true)"
+
   if [ -n "$DETECTED_VERSION" ]; then
     if version_ge "$DETECTED_VERSION" "$MIN_HERMES_VERSION"; then
       pass "Hermes version $DETECTED_VERSION satisfies >= $MIN_HERMES_VERSION"
       case "$DETECTED_VERSION" in
-        0.21.*) pass "Hermes $DETECTED_VERSION is in the v0.5 supported 0.21.x compatibility line";;
-        *) warn "Hermes $DETECTED_VERSION is newer than the v0.5 tested 0.21.x compatibility line; verify gateway topology during install";;
+        0.21.*)
+          pass "Hermes $DETECTED_VERSION is in the v0.5 tested 0.21.x compatibility line"
+          ;;
+        *)
+          warn "Hermes $DETECTED_VERSION is newer than the v0.5 tested 0.21.x compatibility line; installer must rely on runtime gateway topology detection"
+          ;;
       esac
     else
       fail "Hermes $DETECTED_VERSION is too old; require >= $MIN_HERMES_VERSION"
@@ -88,9 +139,115 @@ if command -v hermes >/dev/null 2>&1; then
   HERMES_INSTALL_DIR="$(find_hermes_install_dir || true)"
   if [ -n "$HERMES_INSTALL_DIR" ]; then
     pass "Hermes install directory detected: $HERMES_INSTALL_DIR"
-    HERMES_PYTHON="$(find_hermes_python "$HERMES_INSTALWÑTˆˆYJH‚ˆYˆÈ[ˆ‰T“QT×ÔUÓˆˆNÈ[‚ˆ\ÜÈ”]ÛˆÚ]VPSS\È]˜Z[X›H›Üˆš\œÝYÙ[Y™XÞXÛH[\œÈ‚ˆ[ÙBˆ˜Z[Ø[››Ýš[™]ÛˆÚ]VPSS›Üˆš\œÝYÙ[Y™XÞXÛH[\œÈ‚ˆšBˆ[ÙBˆ˜Z[Ø[››Ý]\›Z[™H\›Y\È[œÝ[\™XÝÜžH‚ˆšB‚ˆÐÕÔ—ÕTH‰
-ZÝ[\‰ÕTTŽ‹KÝ\KÚ\›Y\ËYš\œÝXYÙ[YØÝÜ‹–ŠH‚ˆÒUÕTH‰
-ZÝ[\‰ÕTTŽ‹KÝ\KÚ\›Y\ËYš\œÝXYÙ[XÚ]–ŠH‚ˆÚ[ÙŒ‰ÐÕÔ—ÕTˆ‰ÒUÕT‚‚ˆYˆ\›Y\È\Y˜][ØÝÜˆˆ‰ÐÕÔ—ÕTˆ‰ŒNÈ[‚ˆ\ÜÈ’\›Y\ÈØÝÜˆ\ÜÙY‚ˆ[ÙBˆØ\›ˆ’\›Y\ÈØÝÜˆ™\ÜY[œ™\ÛÛ™Y][\ÎÈ™]šY]È™Y›Ü™HÝ\ÝÛY\ˆ\Þ[Y[‚ˆÙY	ÜË×‹ÈÉÈ‰ÐÕÔ—ÕTˆ‹Ù]‹Û[YBˆšB‚ˆYˆ\›Y\È\Y˜][Ú]\H”™\HÛ›NˆÒÈˆˆ‰ÒUÕTˆ‰ŒNÈ[‚ˆ\ÜÈ‘Y˜][\›Y\È›Ùš[HØ[ˆ™XXÚ]ÈÛÛ™šYÝ\™YH‚ˆ[ÙBˆ˜Z[‘Y˜][\›Y\È›Ùš[HÛÝ[›ÝÛÛ\]HHZ[š[X[H\ÝØ[‚ˆÙY	ÜË×‹ÈÉÈ‰ÒUÕTˆ‹Ù]‹Û[YBˆšB™šB‚šYˆÈY‰T“QT×Ô“ÓÕˆNÈ[‚ˆÈ]È‰T“QT×Ô“ÓÕˆH	‰ˆ\ÜÈ’\›Y\ÈÛYH\ÈÜš]X›Nˆ	T“QT×Ô“ÓÕˆ˜Z[’\›Y\ÈÛYH\È›ÝÜš]X›Nˆ	T“QT×Ô“ÓÕ‚™[ÙBˆÈ]È‰ÓQHˆH	‰ˆ\ÜÈ’\›Y\ÈÛYHØ[ˆ™HÜ™X]Yˆ	T“QT×Ô“ÓÕˆ˜Z[Ø[››ÝÜ™X]H\›Y\ÈÛYH[™\Žˆ	ÓQH‚™šB‚”‘TURT‘QÑ’STÏH”ÓÕS›YÛÛ™šYËžX[[\ÝšX][Û‹žX[[‘T”ÒSÓˆ[œÝ[œÚ\]KœÚ[š[œÝ[œÚØÜš\ËÙš\œÝXYÙ[Z[\‹œHÚÚ[ËØÛÛ\[žKXÛÛ^ÔÒÒS›YÚÚ[ËÜ›Û\XYš\ÛÜ‹ÔÒÒS›YÚÚ[ËØZK]ÛÜšËXYš\ÛÜ‹ÔÒÒS›YÚÚ[ËØYÙ[\[›š[™ËXYš\ÛÜ‹ÔÒÒS›Y‚“RTÔÒS‘ÏL™›Üˆˆ[ˆ	‘TURT‘QÑ’STÎÈÂˆYˆÈHYˆ‰ÐÔ’TÑT‹ÉˆˆNÈ[‚ˆ˜Z[“Z\ÜÚ[™ÈXÚØYÙHš[Nˆ	ˆ‚ˆRTÔÒS‘ÏI
+    HERMES_PYTHON="$(find_hermes_python "$HERMES_INSTALL_DIR" || true)"
+    if [ -n "$HERMES_PYTHON" ]; then
+      pass "Python with PyYAML is available: $HERMES_PYTHON"
+    else
+      fail "Cannot find Hermes Python or python3 with PyYAML"
+    fi
+  else
+    fail "Could not determine Hermes install directory"
+  fi
 
-RTÔÒS‘ÊÌJJBˆšB™Û™B–È‰RTÔÒS‘ÈˆY\HH	‰ˆ\ÜÈ‘š\œÝYÙ[XÚØYÙH\ÈÛÛ\]H‚‚šYˆÚ]PÈ‰ÐÔ’TÑTˆˆ™]‹\\œÙHKZ\ËZ[œÚYK]ÛÜšË]™YH‹Ù]‹Û[‰ŒNÈ[‚ˆ\ÜÈ”™\ÜÚ]ÜžH\ÈH˜[YÚ]ÛÜšÚ[™È™YH‚ˆ‘SSÕWÕT“H‰
-Ú]PÈ‰ÐÔ’TÑTˆˆ™[[ÝHÙ]]\›ÜšYÚ[ˆ‹Ù]‹Û[YJH‚ˆYˆÈ[ˆ‰‘SSÕWÕT“ˆNÈ[‚ˆ\ÜÈ‘Ú]™[[ÝH\ÈÛÛ™šYÝ\™Y‚ˆYˆÒUÕT“RSSÔ“ÓTLÚ]PÈ‰ÐÔ’TÑTˆˆË\™[[ÝHKY^]XÛÙHÜšYÚ[ˆPQ‹Ù]‹Û[‰ŒNÈ[‚ˆ\ÜÈ”š]˜]H™\ÜÚ]ÜžHXØÙ\ÜÈ™\šYšYY‚ˆ[ÙBˆØ\›ˆØ[››Ý™\šYžH™[[ÝH™\ÜÚ]ÜžHXØÙ\ÜÈ›Ùš[H[œÝ[Ý\]Hœ›ÛHHš]˜]H™[[ÝHX^H˜Z[‚ˆšBˆ[ÙBˆØ\›ˆ“›ÈÚ]™[[ÝH˜[YYÜšYÚ[ˆ\ÈÛÛ™šYÝ\™YÈ[œÝ[\ˆÚ[\ÙHHØØ[ÚXÚÛÝ]\È\ÝšX][ÛˆÛÝ\˜ÙH‚ˆšB™[ÙBˆØ\›ˆ•\ÈXÚØYÙH\È›Ý[›š[™Èœ›ÛHHÚ]ÛÜšÚ[™È™YH‚™šB‚™XÚÈˆ‚™XÚÈ”Ý[[X\žNˆTÔÏITÔ×ÐÓÕS•ÐT“IÐT“—ÐÓÕS•RSIRSÐÓÕS•‚šYˆÈ‰RSÐÓÕS•ˆYÝNÈ[‚ˆXÚÈ‘[š\›Û›Y[\È“Õ™XYKˆš^[RS][\È™Y›Ü™H[œÝ[][Û‹ˆ‚ˆ^]B™šB™XÚÈ‘[š\›Û›Y[\È™XYKˆÐT“ˆ][\ÈÚÝ[™H™]šY]ÙY™Y›Ü™HÝ\ÝÛY\ˆ\Þ[Y[ˆ‚™^]
+  if command -v mktemp >/dev/null 2>&1; then
+    DOCTOR_TMP="$(mktemp "${TMPDIR:-/tmp}/hermes-first-agent-doctor.XXXXXX")"
+    CHAT_TMP="$(mktemp "${TMPDIR:-/tmp}/hermes-first-agent-chat.XXXXXX")"
+    chmod 600 "$DOCTOR_TMP" "$CHAT_TMP"
+
+    if hermes -p default doctor >"$DOCTOR_TMP" 2>&1; then
+      pass "Default profile Hermes doctor passed"
+    else
+      warn "Default profile Hermes doctor reported unresolved items"
+      sed 's/^/        /' "$DOCTOR_TMP" 2>/dev/null || true
+    fi
+
+    if hermes -p default chat -q "Reply only: OK" >"$CHAT_TMP" 2>&1; then
+      pass "Default profile can reach its configured LLM"
+    else
+      fail "Default profile could not complete the LLM prerequisite test"
+      sed 's/^/        /' "$CHAT_TMP" 2>/dev/null || true
+    fi
+  else
+    fail "Cannot create secure temporary files because mktemp is unavailable"
+  fi
+fi
+
+if [ -d "$HERMES_ROOT" ]; then
+  if [ -w "$HERMES_ROOT" ]; then
+    pass "Hermes home is writable: $HERMES_ROOT"
+  else
+    fail "Hermes home is not writable: $HERMES_ROOT"
+  fi
+else
+  HERMES_PARENT="$(dirname "$HERMES_ROOT")"
+  if [ -d "$HERMES_PARENT" ] && [ -w "$HERMES_PARENT" ]; then
+    pass "Hermes home can be created: $HERMES_ROOT"
+  else
+    fail "Cannot create Hermes home: $HERMES_ROOT"
+  fi
+fi
+
+REQUIRED_FILES=(
+  "SOUL.md"
+  "config.yaml"
+  "distribution.yaml"
+  "VERSION"
+  "check-environment.sh"
+  "install.sh"
+  "update.sh"
+  "uninstall.sh"
+  "scripts/first-agent-helper.py"
+  "skills/company-context/SKILL.md"
+  "skills/prompt-advisor/SKILL.md"
+  "skills/ai-work-advisor/SKILL.md"
+  "skills/agent-planning-advisor/SKILL.md"
+)
+MISSING=0
+for file in "${REQUIRED_FILES[@]}"; do
+  if [ ! -f "$SCRIPT_DIR/$file" ]; then
+    fail "Missing package file: $file"
+    MISSING=$((MISSING + 1))
+  fi
+done
+if [ "$MISSING" -eq 0 ]; then
+  pass "First Agent package is complete"
+fi
+
+if command -v git >/dev/null 2>&1 && git -C "$SCRIPT_DIR" rev-parse --is-inside-work-tree >/dev/null 2>&1; then
+  pass "Repository is a valid Git working tree"
+
+  REMOTE_URL="$(git -C "$SCRIPT_DIR" remote get-url origin 2>/dev/null || true)"
+  if [ -n "$REMOTE_URL" ]; then
+    if origin_matches_expected_repo "$REMOTE_URL"; then
+      pass "Git origin points to cerjary/hermes-first-agent"
+    else
+      fail "Git origin does not point to cerjary/hermes-first-agent: $REMOTE_URL"
+    fi
+
+    if GIT_TERMINAL_PROMPT=0 git -C "$SCRIPT_DIR" ls-remote --exit-code origin HEAD >/dev/null 2>&1; then
+      pass "Private repository access verified"
+    else
+      warn "Cannot verify private repository access; future updates may fail"
+    fi
+  else
+    warn "No Git remote named origin is configured; update.sh will not be able to pull releases"
+  fi
+
+  if [ -n "$(git -C "$SCRIPT_DIR" status --porcelain 2>/dev/null || true)" ]; then
+    warn "Git working tree has local changes; review them before install/update"
+  else
+    pass "Git working tree is clean"
+  fi
+else
+  warn "This package is not running from a Git working tree; private-repo access and future git-based updates cannot be verified"
+fi
+
+echo ""
+echo "Summary: PASS=$PASS_COUNT WARN=$WARN_COUNT FAIL=$FAIL_COUNT"
+if [ "$FAIL_COUNT" -gt 0 ]; then
+  echo "Environment is NOT ready. Fix all FAIL items before installation."
+  exit 1
+fi
+
+echo "Environment is ready."
+exit 0
