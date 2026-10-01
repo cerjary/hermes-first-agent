@@ -282,7 +282,7 @@ def _pre_gateway_dispatch(event=None, gateway=None, **kwargs):
         if locked
         else "Passcode incorrect. Please try again."
     )
-    await _send(gateway, source, message)
+    _send(gateway, source, message)
     return {
         "action": "skip",
         "reason": "first-agent-access-passcode-invalid",
