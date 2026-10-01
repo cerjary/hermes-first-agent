@@ -4,9 +4,9 @@ Private starter distribution for creating an organization's first Hermes **Compa
 
 ## Version
 
-`0.5.6 — Passcode Onboarding & LINE E2E Fix`
+`0.5.7 — Hermes 0.21 Passcode Compatibility Fix`
 
-v0.5.6 fixes first-contact Company Access Passcode onboarding across messaging platforms and the LINE end-to-end authorization path. The first DM now prompts for the passcode without consuming a failed attempt, access-control replies are awaited and delivery failures are logged, and LINE passcode installs allow unknown DMs through the adapter only so the First Agent access hook can authenticate them.
+v0.5.7 keeps the v0.5.6 first-contact Company Access Passcode state machine and fixes compatibility with Hermes 0.21.x gateways. The passcode hook remains synchronous because Hermes 0.21.0-0.21.4 invoke pre_gateway_dispatch synchronously; access-control replies are scheduled on the running gateway loop and their completion is observed so delivery failures are logged.
 
 ---
 
@@ -177,7 +177,7 @@ The authorization is profile-scoped. It applies only to this First Agent. Other 
 
 Company passcode authorization remains profile-scoped. Telegram and other supported transports continue to use their normal Hermes authorization path. LINE is a special case: Hermes checks the LINE adapter allowlist before `pre_gateway_dispatch`, so passcode mode enables LINE adapter ingress to let an unknown DM reach the First Agent access hook. The hook blocks LINE group/room traffic and remains the actual Company Passcode gate before Hermes authorization.
 
-The passcode hook is asynchronous and awaits platform delivery. Access-control reply failures are logged instead of being silently scheduled in the background.
+For Hermes 0.21.x compatibility, the passcode hook is synchronous. Platform replies are scheduled on the already-running gateway event loop, and a completion callback logs send exceptions or failed SendResult values instead of silently discarding them.
 
 ## LINE
 
@@ -443,7 +443,7 @@ Example:
 
 ```yaml
 source: cerjary/hermes-first-agent
-version: 0.5.6
+version: 0.5.7
 agent_id: acme-ai-advisor
 display_name: ACME AI Advisor
 tenant_code: acme
