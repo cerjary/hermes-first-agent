@@ -502,7 +502,7 @@ Example:
 
 ```yaml
 source: cerjary/hermes-first-agent
-version: 0.5.9
+version: 0.5.10
 agent_id: acme-ai-advisor
 display_name: ACME AI Advisor
 tenant_code: acme
