@@ -38,7 +38,26 @@ echo ""
 echo "Installed Hermes First Agents:"
 echo ""
 for idx in "${!FIRST_AGENT_ROWS[@]}"; do
-  IFS=
+  IFS=$'\t' read -r row_agent_id row_display_name row_version <<< "${FIRST_AGENT_ROWS[$idx]}"
+  printf '  %d) %s  [%s]  v%s\n' "$((idx + 1))" "$row_display_name" "$row_agent_id" "$row_version"
+done
+echo ""
+
+while true; do
+  read -r -p "Select Agent to uninstall [1-${#FIRST_AGENT_ROWS[@]}]: " SELECTION
+  if [[ "$SELECTION" =~ ^[0-9]+$ ]] && [ "$SELECTION" -ge 1 ] && [ "$SELECTION" -le "${#FIRST_AGENT_ROWS[@]}" ]; then
+    break
+  fi
+  echo "Invalid selection."
+done
+
+IFS=$'\t' read -r AGENT_ID DISPLAY_NAME INSTALLED_VERSION <<< "${FIRST_AGENT_ROWS[$((SELECTION - 1))]}"
+validate_agent_id "$AGENT_ID"
+PROFILE_HOME="$HERMES_ROOT/profiles/$AGENT_ID"
+MANIFEST="$PROFILE_HOME/FIRST_AGENT.yaml"
+[ -f "$MANIFEST" ] || die "FIRST_AGENT.yaml disappeared; refusing to continue"
+"$HERMES_PYTHON" "$HELPER" verify-manifest --path "$MANIFEST" --agent-id "$AGENT_ID" >/dev/null
+
 echo ""
 echo "Selected First Agent:"
 echo "  Display Name: $DISPLAY_NAME"
@@ -82,115 +101,11 @@ case "${CONFIRM,,}" in
   y|yes) ;;
   *) echo "Cancelled."; exit 0;;
 esac
+
 hermes profile delete "$AGENT_ID" --yes
 
 echo "First Agent $AGENT_ID has been removed."
 if [ -e "$HERMES_ROOT/profiles/.deleted/$AGENT_ID" ]; then
   echo "Hermes kept an internal deletion marker for this profile."
-  echo "The v0.5 installer detects this marker and requires explicit REINSTALL confirmation before reusing the same Agent ID."
-fi
-\t' read -r row_agent_id row_display_name row_version <<< "${FIRST_AGENT_ROWS[$idx]}"
-  printf '  %d) %s  [%s]  v%s\n' "$((idx + 1))" "$row_display_name" "$row_agent_id" "$row_version"
-done
-echo ""
-
-while true; do
-  read -r -p "Select Agent to uninstall [1-${#FIRST_AGENT_ROWS[@]}]: " SELECTION
-  if [[ "$SELECTION" =~ ^[0-9]+$ ]] && [ "$SELECTION" -ge 1 ] && [ "$SELECTION" -le "${#FIRST_AGENT_ROWS[@]}" ]; then
-    break
-  fi
-  echo "Invalid selection."
-done
-
-IFS=
-echo ""
-echo "This will permanently remove:"
-echo "  - First Agent profile: $AGENT_ID"
-echo "  - SOUL / Skills / config"
-echo "  - memories and sessions"
-echo "  - profile messaging credentials and data"
-echo "  - gateway service/routing managed by Hermes for this profile"
-echo ""
-echo "Hermes itself, the default profile, and other profiles will NOT be removed."
-echo ""
-echo "Backup options:"
-echo "  1) Delete without profile export"
-echo "  2) Export profile first, then delete"
-echo "  3) Cancel"
-read -r -p "Selection [1/2/3]: " CHOICE
-case "$CHOICE" in
-  1) ;;
-  2)
-    umask 077
-    BACKUP_DIR="$HERMES_ROOT/backups/first-agent"
-    mkdir -p "$BACKUP_DIR"
-    chmod 700 "$BACKUP_DIR"
-    TS="$(date -u +'%Y%m%dT%H%M%SZ')"
-    BACKUP="$BACKUP_DIR/${AGENT_ID}-${TS}.tar.gz"
-    hermes profile export "$AGENT_ID" -o "$BACKUP"
-    chmod 600 "$BACKUP"
-    echo "Profile export created: $BACKUP"
-    echo "The export excludes .env and auth.json, but can contain memories, sessions, and other sensitive profile data."
-    ;;
-  3) echo "Cancelled."; exit 0;;
-  *) die "Invalid selection";;
-esac
-
-read -r -p "Type the Agent ID '$AGENT_ID' to confirm permanent deletion: " CONFIRM
-[ "$CONFIRM" = "$AGENT_ID" ] || die "Confirmation did not match"
-hermes profile delete "$AGENT_ID" --yes
-
-echo "First Agent $AGENT_ID has been removed."
-if [ -e "$HERMES_ROOT/profiles/.deleted/$AGENT_ID" ]; then
-  echo "Hermes kept an internal deletion marker for this profile."
-  echo "The v0.5 installer detects this marker and requires explicit REINSTALL confirmation before reusing the same Agent ID."
-fi
-\t' read -r AGENT_ID DISPLAY_NAME INSTALLED_VERSION <<< "${FIRST_AGENT_ROWS[$((SELECTION - 1))]}"
-validate_agent_id "$AGENT_ID"
-PROFILE_HOME="$HERMES_ROOT/profiles/$AGENT_ID"
-MANIFEST="$PROFILE_HOME/FIRST_AGENT.yaml"
-[ -f "$MANIFEST" ] || die "FIRST_AGENT.yaml disappeared; refusing to continue"
-"$HERMES_PYTHON" "$HELPER" verify-manifest --path "$MANIFEST" --agent-id "$AGENT_ID" >/dev/null
-
-echo ""
-echo "This will permanently remove:"
-echo "  - First Agent profile: $AGENT_ID"
-echo "  - SOUL / Skills / config"
-echo "  - memories and sessions"
-echo "  - profile messaging credentials and data"
-echo "  - gateway service/routing managed by Hermes for this profile"
-echo ""
-echo "Hermes itself, the default profile, and other profiles will NOT be removed."
-echo ""
-echo "Backup options:"
-echo "  1) Delete without profile export"
-echo "  2) Export profile first, then delete"
-echo "  3) Cancel"
-read -r -p "Selection [1/2/3]: " CHOICE
-case "$CHOICE" in
-  1) ;;
-  2)
-    umask 077
-    BACKUP_DIR="$HERMES_ROOT/backups/first-agent"
-    mkdir -p "$BACKUP_DIR"
-    chmod 700 "$BACKUP_DIR"
-    TS="$(date -u +'%Y%m%dT%H%M%SZ')"
-    BACKUP="$BACKUP_DIR/${AGENT_ID}-${TS}.tar.gz"
-    hermes profile export "$AGENT_ID" -o "$BACKUP"
-    chmod 600 "$BACKUP"
-    echo "Profile export created: $BACKUP"
-    echo "The export excludes .env and auth.json, but can contain memories, sessions, and other sensitive profile data."
-    ;;
-  3) echo "Cancelled."; exit 0;;
-  *) die "Invalid selection";;
-esac
-
-read -r -p "Type the Agent ID '$AGENT_ID' to confirm permanent deletion: " CONFIRM
-[ "$CONFIRM" = "$AGENT_ID" ] || die "Confirmation did not match"
-hermes profile delete "$AGENT_ID" --yes
-
-echo "First Agent $AGENT_ID has been removed."
-if [ -e "$HERMES_ROOT/profiles/.deleted/$AGENT_ID" ]; then
-  echo "Hermes kept an internal deletion marker for this profile."
-  echo "The v0.5 installer detects this marker and requires explicit REINSTALL confirmation before reusing the same Agent ID."
+  echo "The installer detects this marker and requires explicit REINSTALL confirmation before reusing the same Agent ID."
 fi
