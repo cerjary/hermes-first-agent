@@ -341,13 +341,17 @@ case "$ACCESS_SELECTION" in
   1)
     ACCESS_MODE="passcode"
     read_secret "Create company access passcode (8-128 characters)" COMPANY_PASSCODE
-    [ "${#COMPANY_PASSCODE}" -ge 8 ] && [ "${#COMPANY_PASSCODE}" -le 128 ] || die "Company passcode must be 8-128 characters."
+    if [ "${#COMPANY_PASSCODE}" -lt 8 ] || [ "${#COMPANY_PASSCODE}" -gt 128 ]; then
+      die "Company passcode must be 8-128 characters."
+    fi
     check_single_line "Company passcode" "$COMPANY_PASSCODE"
     read_secret "Confirm company access passcode" COMPANY_PASSCODE_CONFIRM
     [ "$COMPANY_PASSCODE" = "$COMPANY_PASSCODE_CONFIRM" ] || die "Company passcode confirmation did not match."
     PASSCODE_META="$(printf '%s' "$COMPANY_PASSCODE" | "$HERMES_PYTHON" "$HELPER" hash-passcode)"
     IFS=: read -r ACCESS_PASSCODE_SALT ACCESS_PASSCODE_HASH ACCESS_PASSCODE_ITERATIONS <<< "$PASSCODE_META"
-    [ -n "$ACCESS_PASSCODE_SALT" ] && [ -n "$ACCESS_PASSCODE_HASH" ] && [ -n "$ACCESS_PASSCODE_ITERATIONS" ] || die "Could not derive company passcode hash."
+    if [ -z "$ACCESS_PASSCODE_SALT" ] || [ -z "$ACCESS_PASSCODE_HASH" ] || [ -z "$ACCESS_PASSCODE_ITERATIONS" ]; then
+      die "Could not derive company passcode hash."
+    fi
     unset COMPANY_PASSCODE COMPANY_PASSCODE_CONFIRM PASSCODE_META
     ;;
   2)
