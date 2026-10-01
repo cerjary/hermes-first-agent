@@ -10,6 +10,8 @@ import os
 import secrets
 import threading
 import time
+import urllib.error
+import urllib.request
 from pathlib import Path
 from typing import Any
 
@@ -172,6 +174,68 @@ def _clear_failures(platform: str, user_id: str) -> None:
             _write_state(state)
 
 
+def _line_post(path: str, payload: dict[str, Any]) -> bool:
+    """Send a small LINE control-plane message synchronously.
+
+    Passcode messages run before normal Hermes authorization/dispatch. On
+    Hermes 0.21.x this avoids depending on an async adapter send surviving a
+    synchronous pre_gateway_dispatch hook.
+    """
+    token = _get_secret("LINE_CHANNEL_ACCESS_TOKEN")
+    if not token:
+        logger.warning("First Agent LINE access reply missing channel access token")
+        return False
+
+    data = json.dumps(payload).encode("utf-8")
+    request = urllib.request.Request(
+        f"https://api.line.me/v2/bot/message/{path}",
+        data=data,
+        headers={
+            "Authorization": f"Bearer {token}",
+            "Content-Type": "application/json",
+        },
+        method="POST",
+    )
+    try:
+        with urllib.request.urlopen(request, timeout=3) as response:
+            status = int(getattr(response, "status", 200) or 200)
+            if 200 <= status < 300:
+                return True
+            logger.warning(
+                "First Agent LINE access reply returned HTTP %s", status
+            )
+    except urllib.error.HTTPError as exc:
+        logger.warning(
+            "First Agent LINE access reply returned HTTP %s", exc.code
+        )
+    except Exception:
+        logger.warning(
+            "First Agent LINE access reply request failed",
+            exc_info=True,
+        )
+    return False
+
+
+def _send_line_direct(event: Any, source: Any, message: str) -> bool:
+    raw = getattr(event, "raw_message", None)
+    reply_token = raw.get("replyToken", "") if isinstance(raw, dict) else ""
+    messages = [{"type": "text", "text": message}]
+
+    if reply_token and _line_post(
+        "reply",
+        {"replyToken": reply_token, "messages": messages},
+    ):
+        return True
+
+    chat_id = str(getattr(source, "chat_id", "") or "").strip()
+    if chat_id:
+        return _line_post(
+            "push",
+            {"to": chat_id, "messages": messages},
+        )
+    return False
+
+
 async def _deliver_reply(adapter: Any, source: Any, message: str) -> None:
     platform = getattr(source, "platform", None)
     try:
@@ -192,7 +256,7 @@ async def _deliver_reply(adapter: Any, source: Any, message: str) -> None:
         )
 
 
-def _send(gateway: Any, source: Any, message: str) -> bool:
+def _send(gateway: Any, source: Any, message: str, event: Any = None) -> bool:
     """Schedule an access-control reply and retain it until completion.
 
     Hermes 0.21.x invokes pre_gateway_dispatch synchronously from the running
@@ -200,6 +264,15 @@ def _send(gateway: Any, source: Any, message: str) -> bool:
     the send coroutine keeps a strong reference until it finishes. A local
     retained-task set is the compatibility fallback.
     """
+    platform_obj = getattr(source, "platform", None)
+    platform = str(getattr(platform_obj, "value", "") or "").strip().lower()
+    if platform == "line" and event is not None:
+        if _send_line_direct(event, source, message):
+            return True
+        logger.warning(
+            "First Agent LINE direct access reply failed; falling back to Hermes adapter"
+        )
+
     adapter = None
     try:
         adapter = gateway._delivery_adapter_for(source)
@@ -317,7 +390,7 @@ def _pre_gateway_dispatch(event=None, gateway=None, **kwargs):
         pass
 
     if _needs_initial_prompt(platform, user_id):
-        _send(gateway, source, _PASSCODE_PROMPT)
+        _send(gateway, source, _PASSCODE_PROMPT, event)
         return {
             "action": "skip",
             "reason": "first-agent-access-passcode-required",
@@ -328,12 +401,13 @@ def _pre_gateway_dispatch(event=None, gateway=None, **kwargs):
             gateway,
             source,
             "Too many incorrect passcode attempts. Please try again in 15 minutes.",
+            event,
         )
         return {"action": "skip", "reason": "first-agent-access-locked"}
 
     text = str(getattr(event, "text", "") or "").strip()
     if not text or text.startswith("/"):
-        _send(gateway, source, _PASSCODE_PROMPT)
+        _send(gateway, source, _PASSCODE_PROMPT, event)
         return {
             "action": "skip",
             "reason": "first-agent-access-passcode-required",
@@ -352,6 +426,7 @@ def _pre_gateway_dispatch(event=None, gateway=None, **kwargs):
                 source,
                 "Access verified. Your messaging account is now authorized "
                 "for this Agent. Send your request to continue.",
+                event,
             )
             return {
                 "action": "skip",
@@ -363,6 +438,7 @@ def _pre_gateway_dispatch(event=None, gateway=None, **kwargs):
             source,
             "The passcode was valid, but access could not be saved. "
             "Please contact the installer.",
+            event,
         )
         return {
             "action": "skip",
@@ -375,7 +451,7 @@ def _pre_gateway_dispatch(event=None, gateway=None, **kwargs):
         if locked
         else "Passcode incorrect. Please try again."
     )
-    _send(gateway, source, message)
+    _send(gateway, source, message, event)
     return {
         "action": "skip",
         "reason": "first-agent-access-passcode-invalid",
