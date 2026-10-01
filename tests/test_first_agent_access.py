@@ -85,10 +85,12 @@ def _source(platform="line", chat_type="dm", user_id="U-test"):
 
 
 def _event(text="Hi", platform="line", chat_type="dm", user_id="U-test"):
+    raw_message = {"replyToken": "reply-token"} if platform == "line" else {}
     return types.SimpleNamespace(
         internal=False,
         source=_source(platform, chat_type, user_id),
         text=text,
+        raw_message=raw_message,
     )
 
 
@@ -222,6 +224,50 @@ class CompanyPasscodeTests(unittest.TestCase):
         self.assertEqual(result["reason"], "first-agent-access-line-non-dm")
         self.assertEqual(gateway.adapter.messages, [])
         self.assertFalse(self.state_path.exists())
+
+    def test_line_direct_reply_prefers_reply_token(self):
+        calls = []
+        original = MODULE._line_post
+        MODULE._line_post = lambda path, payload: calls.append((path, payload)) or True
+        try:
+            ok = MODULE._send_line_direct(
+                _event("Hi"),
+                _source(),
+                "Passcode prompt",
+            )
+        finally:
+            MODULE._line_post = original
+
+        self.assertTrue(ok)
+        self.assertEqual(calls[0][0], "reply")
+        self.assertEqual(calls[0][1]["replyToken"], "reply-token")
+        self.assertEqual(
+            calls[0][1]["messages"][0]["text"],
+            "Passcode prompt",
+        )
+        self.assertEqual(len(calls), 1)
+
+    def test_line_direct_reply_falls_back_to_push(self):
+        calls = []
+        original = MODULE._line_post
+
+        def fake_post(path, payload):
+            calls.append((path, payload))
+            return path == "push"
+
+        MODULE._line_post = fake_post
+        try:
+            ok = MODULE._send_line_direct(
+                _event("Hi"),
+                _source(),
+                "Passcode prompt",
+            )
+        finally:
+            MODULE._line_post = original
+
+        self.assertTrue(ok)
+        self.assertEqual([row[0] for row in calls], ["reply", "push"])
+        self.assertEqual(calls[1][1]["to"], "U-test")
 
     def test_send_uses_gateway_background_task_tracker(self):
         gateway = _Gateway()
