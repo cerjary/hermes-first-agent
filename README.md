@@ -78,6 +78,25 @@ After installation, changing the default profile's model does not silently chang
 
 ---
 
+# Lifecycle scripts
+
+The repository keeps lifecycle operations explicit rather than hiding them behind one all-purpose command.
+
+| Script | 用途 | 何時使用 |
+| --- | --- | --- |
+| `check-environment.sh` | 安裝前的 read-only preflight。檢查 Hermes 版本與安裝目錄、default profile LLM、Python/PyYAML、Hermes home 寫入能力等必要條件。 | 第一次安裝前；環境升級後也可重跑。 |
+| `install.sh` | 建立新的 First Agent。收集 Tenant / Business / Messaging 設定、建立 Company AI Advisor profile、繼承 default LLM、寫入 access policy、啟動 Gateway；選用 LINE 時，初始安裝可直接建立 Cloudflare Quick Tunnel，讓 webhook 最快可用。 | 建立一隻新的 First Agent。不是用來修復既有 Agent。 |
+| `update.sh` | 更新既有 First Agent distribution 與必要的相容性 migration，同時保留 profile 自己的 `.env`、memory、session、LLM 與 messaging 設定。可在適用時重新啟動該 profile gateway。 | Repository 有新版 First Agent，且既有 Agent 要升級時。 |
+| `line-tunnel-update.sh` | 管理 LINE 的 public HTTPS endpoint。可建立／更換 First Agent 自己的 Cloudflare Quick Tunnel，或改成既有 HTTPS domain；也能停止該 First Agent 自己建立的 Quick Tunnel。 | 初始 Quick Tunnel 要重建、LINE webhook URL 要更新，或之後換正式 domain 時。 |
+| `uninstall.sh` | 安全移除已安裝的 First Agent。會先辨識合法的 First Agent profile，必要時處理該 Agent 自己管理的 Quick Tunnel，再刪除 profile。 | 確定不再需要該 First Agent 時。 |
+
+Important lifecycle boundaries:
+
+- `install.sh` 負責「建立 Agent」；post-install messaging / gateway 驗證失敗時，已完成的 Agent 不應因此被刪除。
+- `line-tunnel-update.sh` 只管理該 First Agent 自己的 LINE public endpoint，不修改或停止其他 Cloudflare tunnel / service。
+- `update.sh` 不把 default profile 後續的 LLM 變更自動同步到 First Agent；規則仍是 **inherit on install, independent after install**。
+- 新增 lifecycle `.sh` 時，應同步在本節補上用途、使用時機與影響範圍。
+
 # First-Time Installation Checklist
 
 Before running `install.sh`, prepare:
