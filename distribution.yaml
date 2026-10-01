@@ -1,6 +1,6 @@
 name: first-agent
-version: 0.5.5
-description: "Focused Hermes Company AI Advisor with profile-scoped access control and LINE public-access lifecycle management."
+version: 0.5.6
+description: "Focused Hermes Company AI Advisor with first-contact passcode onboarding, awaited access replies, and LINE public-access lifecycle management."
 hermes_requires: ">=0.21.0"
 author: "cerjary"
 license: "Proprietary"
@@ -12,7 +12,7 @@ env_requires:
     description: "LINE Messaging API channel secret; required only when LINE is selected"
     required: false
   - name: LINE_ALLOW_ALL_USERS
-    description: "Testing-only LINE allow-all switch; normal First Agent installs use Company passcode"
+    description: "LINE adapter ingress switch; Company passcode mode enables it so unknown DMs can reach the First Agent access hook, which remains the authorization gate and blocks LINE group/room traffic"
     required: false
   - name: LINE_PUBLIC_URL
     description: "Public HTTPS base URL for LINE webhook/media; managed by line-tunnel-update.sh or supplied externally"
