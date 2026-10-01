@@ -7,6 +7,10 @@ gateway:
     weixin:
       enabled: false
 
+plugins:
+  enabled:
+    - first-agent-access
+
 memory:
   memory_enabled: true
   user_profile_enabled: true

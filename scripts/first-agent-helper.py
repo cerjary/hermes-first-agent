@@ -1,9 +1,11 @@
 #!/usr/bin/env python3
 import argparse
 import copy
+import hashlib
 import json
 import os
 import re
+import secrets
 import socket
 import sys
 import tempfile
@@ -348,6 +350,18 @@ def command_write_manifest(args):
     atomic_write_yaml(Path(args.path).expanduser().resolve(), data)
 
 
+def command_hash_passcode(args):
+    passcode = sys.stdin.read()
+    if "\n" in passcode or "\r" in passcode:
+        raise SystemExit("Company passcode must be a single line")
+    if not 8 <= len(passcode) <= 128:
+        raise SystemExit("Company passcode must be 8-128 characters")
+    iterations = 210000
+    salt = secrets.token_bytes(16)
+    digest = hashlib.pbkdf2_hmac("sha256", passcode.encode("utf-8"), salt, iterations)
+    print(f"{salt.hex()}\t{digest.hex()}\t{iterations}")
+
+
 def command_set_manifest_version(args):
     path = Path(args.path).expanduser().resolve()
     data = load_yaml(path)
@@ -437,6 +451,9 @@ def build_parser():
     p.add_argument("--platform", action="append", default=[])
     p.add_argument("--line-port", default="")
     p.set_defaults(func=command_write_manifest)
+
+    p = sub.add_parser("hash-passcode")
+    p.set_defaults(func=command_hash_passcode)
 
     p = sub.add_parser("set-manifest-version")
     p.add_argument("--path", required=True)

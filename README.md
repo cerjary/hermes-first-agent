@@ -150,6 +150,31 @@ The platforms share the same Agent Profile, SOUL, Skills, durable Memory, and av
 
 # Messaging Platform Requirements
 
+## First Agent access control
+
+The normal First Agent installer uses one profile-scoped access policy across its selected messaging platforms:
+
+```text
+1) Company passcode (Recommended)
+2) Allow all users (Testing only)
+```
+
+With **Company passcode**, the installer asks the installer/operator to choose a memorable 8–128 character passcode. The plaintext passcode is never written to the profile; only a salted PBKDF2-SHA256 hash is stored.
+
+For a direct-message user:
+
+```text
+first DM
+  → enter Company Access Passcode
+  → successful verification
+  → that platform user ID is granted in this First Agent profile's Hermes approved-user store
+  → future DMs do not require the passcode again
+```
+
+The authorization is profile-scoped. It applies only to this First Agent. Other Hermes Agents may use completely different access-control methods.
+
+Company passcode mode does **not** set the messaging platform to global allow-all. If the First Agent access plugin cannot authorize a sender, Hermes' own authorization remains the final gate.
+
 ## LINE
 
 Prepare:
@@ -158,7 +183,7 @@ Prepare:
 - Messaging API Channel
 - Long-lived Channel Access Token
 - Channel Secret
-- Allowed LINE user ID(s), or explicitly accept temporary allow-all
+- Company Access Passcode (recommended), or explicitly choose testing-only allow-all
 - A public HTTPS URL when you are ready to connect LINE
 
 The public HTTPS URL is optional during initial installation. This allows a test customer without a domain to install first and create a temporary tunnel afterward.
@@ -216,7 +241,7 @@ Prepare:
 - Telegram account
 - Bot created through BotFather
 - Telegram Bot Token
-- Allowed Telegram numeric user ID(s), or explicit temporary allow-all
+- Company Access Passcode (recommended), or explicitly choose testing-only allow-all
 
 Hermes normally uses Telegram long polling, so no inbound listener port or public webhook URL is required.
 
@@ -239,7 +264,7 @@ Important:
 - Weixin is **not WeCom**
 - DM/pairing is the primary supported usage pattern
 - ordinary WeChat group behavior may be limited by the iLink platform
-- prefer pairing or an allowlist rather than open access
+- normal First Agent installs use the selected First Agent access policy; testing-only allow-all remains explicit
 
 Weixin normally uses long polling and does not require LINE-style port allocation.
 
@@ -383,7 +408,7 @@ Example:
 
 ```yaml
 source: cerjary/hermes-first-agent
-version: 0.5.2
+version: 0.5.3
 agent_id: acme-ai-advisor
 display_name: ACME AI Advisor
 tenant_code: acme
@@ -524,8 +549,9 @@ Hermes profile export excludes `.env` and `auth.json`, but the archive can conta
 - Do not commit `.env`, tokens, API keys, OAuth state, private keys, or profile exports.
 - LINE and Telegram validation sends secrets to curl through stdin config so tokens are not placed in the normal process argument list.
 - LLM inheritance copies only model/provider configuration and recognized LLM provider credential keys; it does not copy messaging credentials from the default profile.
-- Prefer per-platform allowlists.
-- Enabling temporary allow-all requires typing the exact phrase `ALLOW ALL`.
+- Prefer the First Agent Company Access Passcode for normal internal-company use.
+- Company passcodes are stored only as salted PBKDF2-SHA256 hashes; plaintext is not persisted by the installer.
+- Allow-all is an explicit testing-only installation option.
 - Installer rollback is limited to the newly owned profile target.
 - Uninstall validates both source identity and Agent ID.
 

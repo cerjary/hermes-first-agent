@@ -1,5 +1,5 @@
 name: first-agent
-version: 0.5.2
+version: 0.5.3
 description: "Focused Hermes Company AI Advisor with default-LLM inheritance, topology-aware messaging, and hardened lifecycle management."
 hermes_requires: ">=0.21.0"
 author: "cerjary"
@@ -11,11 +11,8 @@ env_requires:
   - name: LINE_CHANNEL_SECRET
     description: "LINE Messaging API channel secret; required only when LINE is selected"
     required: false
-  - name: LINE_ALLOWED_USERS
-    description: "Comma-separated LINE user IDs allowed to use the agent"
-    required: false
   - name: LINE_ALLOW_ALL_USERS
-    description: "Temporary LINE allow-all switch; prefer an allowlist"
+    description: "Testing-only LINE allow-all switch; normal First Agent installs use Company passcode"
     required: false
   - name: LINE_PUBLIC_URL
     description: "Public HTTPS base URL for LINE webhook/media; may be configured after installation"
@@ -26,11 +23,8 @@ env_requires:
   - name: TELEGRAM_BOT_TOKEN
     description: "Telegram bot token from BotFather; required only when Telegram is selected"
     required: false
-  - name: TELEGRAM_ALLOWED_USERS
-    description: "Comma-separated Telegram user IDs allowed to use the agent"
-    required: false
   - name: TELEGRAM_ALLOW_ALL_USERS
-    description: "Temporary Telegram allow-all switch; prefer an allowlist"
+    description: "Testing-only Telegram allow-all switch; normal First Agent installs use Company passcode"
     required: false
   - name: WEIXIN_ACCOUNT_ID
     description: "Weixin iLink account ID created by Hermes native QR setup"
@@ -39,11 +33,27 @@ env_requires:
     description: "Weixin iLink token created by Hermes native QR setup"
     required: false
   - name: WEIXIN_DM_POLICY
-    description: "Weixin direct-message access policy; pairing or allowlist is recommended"
+    description: "Weixin direct-message access policy"
+    required: false
+  - name: WEIXIN_ALLOW_ALL_USERS
+    description: "Testing-only Weixin allow-all switch"
+    required: false
+  - name: FIRST_AGENT_ACCESS_MODE
+    description: "First Agent messaging access mode: passcode or allow_all"
+    required: false
+  - name: FIRST_AGENT_PASSCODE_SALT
+    description: "Generated salt for the Company Access Passcode hash"
+    required: false
+  - name: FIRST_AGENT_PASSCODE_HASH
+    description: "PBKDF2-SHA256 hash of the Company Access Passcode; plaintext is never stored"
+    required: false
+  - name: FIRST_AGENT_PASSCODE_ITERATIONS
+    description: "PBKDF2 iteration count for Company Access Passcode verification"
     required: false
 
 distribution_owned:
   - SOUL.md
   - config.yaml
   - skills/
+  - plugins/
   - distribution.yaml

@@ -199,6 +199,8 @@ REQUIRED_FILES=(
   "update.sh"
   "uninstall.sh"
   "scripts/first-agent-helper.py"
+  "plugins/first-agent-access/plugin.yaml"
+  "plugins/first-agent-access/__init__.py"
   "skills/company-context/SKILL.md"
   "skills/prompt-advisor/SKILL.md"
   "skills/ai-work-advisor/SKILL.md"
@@ -229,7 +231,7 @@ if command -v git >/dev/null 2>&1 && git -C "$SCRIPT_DIR" rev-parse --is-inside-
     if GIT_TERMINAL_PROMPT=0 git -C "$SCRIPT_DIR" ls-remote --exit-code origin HEAD >/dev/null 2>&1; then
       pass "Repository remote access verified"
     else
-      warn "Cannot verify private repository access; future updates may fail"
+      warn "Cannot verify repository remote access; future updates may fail"
     fi
   else
     warn "No Git remote named origin is configured; update.sh will not be able to pull releases"
@@ -241,7 +243,7 @@ if command -v git >/dev/null 2>&1 && git -C "$SCRIPT_DIR" rev-parse --is-inside-
     pass "Git working tree is clean"
   fi
 else
-  warn "This package is not running from a Git working tree; private-repo access and future git-based updates cannot be verified"
+  warn "This package is not running from a Git working tree; repository remote access and future git-based updates cannot be verified"
 fi
 
 echo ""

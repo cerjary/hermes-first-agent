@@ -1,0 +1,6 @@
+name: first-agent-access
+version: 0.1.0
+description: "Profile-scoped Company Access Passcode gate for First Agent messaging DMs."
+author: "cerjary"
+provides_hooks:
+  - pre_gateway_dispatch
