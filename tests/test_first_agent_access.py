@@ -58,6 +58,7 @@ class _Gateway:
     def __init__(self, adapter=None, store=None):
         self.adapter = adapter or _Adapter()
         self.store = store or _PairingStore()
+        self._background_tasks = set()
 
     def _delivery_adapter_for(self, source):
         del source
@@ -66,6 +67,11 @@ class _Gateway:
     def _pairing_store_for(self, source):
         del source
         return self.store
+
+    def _track_background_task(self, coro):
+        task = asyncio.create_task(coro)
+        self._background_tasks.add(task)
+        task.add_done_callback(self._background_tasks.discard)
 
 
 def _source(platform="line", chat_type="dm", user_id="U-test"):
@@ -217,11 +223,24 @@ class CompanyPasscodeTests(unittest.TestCase):
         self.assertEqual(gateway.adapter.messages, [])
         self.assertFalse(self.state_path.exists())
 
+    def test_send_uses_gateway_background_task_tracker(self):
+        gateway = _Gateway()
+
+        async def run():
+            ok = MODULE._send(gateway, _source(), "tracked")
+            await asyncio.sleep(0)
+            await asyncio.sleep(0)
+            return ok
+
+        self.assertTrue(asyncio.run(run()))
+        self.assertEqual(gateway.adapter.messages[-1][1], "tracked")
+
     def test_send_failure_is_logged_without_blocking_hook(self):
         gateway = _Gateway(adapter=_Adapter(success=False))
 
         async def run():
             ok = MODULE._send(gateway, _source(), "test")
+            await asyncio.sleep(0)
             await asyncio.sleep(0)
             return ok
 
