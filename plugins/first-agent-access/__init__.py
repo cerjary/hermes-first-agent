@@ -2,9 +2,9 @@
 
 from __future__ import annotations
 
-import asyncio
 import hashlib
 import json
+import logging
 import os
 import secrets
 import threading
@@ -16,6 +16,12 @@ FAIL_WINDOW_SECONDS = 15 * 60
 LOCK_SECONDS = 15 * 60
 MAX_FAILURES = 5
 _STATE_LOCK = threading.RLock()
+logger = logging.getLogger(__name__)
+
+_PASSCODE_PROMPT = (
+    "This Company AI Advisor is for authorized company users. "
+    "Enter the Company Access Passcode to continue."
+)
 
 
 def _get_secret(name: str, default: str = "") -> str:
@@ -94,6 +100,28 @@ def _principal_key(platform: str, user_id: str) -> str:
     return f"{platform}:{user_id}"
 
 
+def _needs_initial_prompt(platform: str, user_id: str) -> bool:
+    """Create the awaiting-passcode state on first contact.
+
+    Pre-v0.5.6 entries did not have awaiting_passcode and may contain failures
+    caused by ordinary greeting text. Treat those entries as legacy and reset
+    them so an upgrade cannot lock out an unapproved user.
+    """
+    key = _principal_key(platform, user_id)
+    with _STATE_LOCK:
+        state = _read_state()
+        entry = state.get(key)
+        if isinstance(entry, dict) and entry.get("awaiting_passcode") is True:
+            return False
+        state[key] = {
+            "awaiting_passcode": True,
+            "failures": [],
+            "locked_until": 0.0,
+        }
+        _write_state(state)
+        return True
+
+
 def _is_locked(platform: str, user_id: str) -> bool:
     now = time.time()
     key = _principal_key(platform, user_id)
@@ -124,7 +152,11 @@ def _record_failure(platform: str, user_id: str) -> bool:
         if len(failures) >= MAX_FAILURES:
             locked_until = max(locked_until, now + LOCK_SECONDS)
             failures = []
-        state[key] = {"failures": failures, "locked_until": locked_until}
+        state[key] = {
+            "awaiting_passcode": True,
+            "failures": failures,
+            "locked_until": locked_until,
+        }
         _write_state(state)
         return locked_until > now
 
@@ -138,8 +170,8 @@ def _clear_failures(platform: str, user_id: str) -> None:
             _write_state(state)
 
 
-def _send(gateway: Any, source: Any, message: str) -> None:
-    """Schedule a platform reply from Hermes' synchronous pre-dispatch hook."""
+async def _send(gateway: Any, source: Any, message: str) -> bool:
+    """Deliver an access-control reply and make failures observable."""
     adapter = None
     try:
         adapter = gateway._delivery_adapter_for(source)
@@ -147,12 +179,30 @@ def _send(gateway: Any, source: Any, message: str) -> None:
         adapters = getattr(gateway, "adapters", None) or {}
         adapter = adapters.get(getattr(source, "platform", None))
     if adapter is None:
-        return
+        logger.warning(
+            "First Agent access reply could not be sent: no delivery adapter for %s",
+            getattr(source, "platform", None),
+        )
+        return False
+
     try:
-        loop = asyncio.get_running_loop()
-    except RuntimeError:
-        return
-    loop.create_task(adapter.send(source.chat_id, message))
+        result = await adapter.send(source.chat_id, message)
+    except Exception:
+        logger.warning(
+            "First Agent access reply raised while sending to %s",
+            getattr(source, "platform", None),
+            exc_info=True,
+        )
+        return False
+
+    if getattr(result, "success", True) is False:
+        logger.warning(
+            "First Agent access reply failed on %s: %s",
+            getattr(source, "platform", None),
+            getattr(result, "error", "unknown delivery error"),
+        )
+        return False
+    return True
 
 
 def _pairing_store(gateway: Any, source: Any):
@@ -174,7 +224,6 @@ def _approve_user(
     except Exception:
         pass
 
-    # Prefer public pairing APIs.
     try:
         code = store.generate_code(platform, user_id, user_name)
         if code and store.approve_code(platform, code):
@@ -182,8 +231,6 @@ def _approve_user(
     except Exception:
         pass
 
-    # Compatibility fallback for Hermes lines where a pending/rate-limit slot
-    # prevents generate_code. The approval is still written by PairingStore.
     approve = getattr(store, "_approve_user", None)
     lock = getattr(store, "_lock", None)
     if callable(approve) and lock is not None:
@@ -196,20 +243,35 @@ def _approve_user(
     return False
 
 
-def _pre_gateway_dispatch(event=None, gateway=None, **kwargs):
+async def _pre_gateway_dispatch(event=None, gateway=None, **kwargs):
     del kwargs
     if event is None or gateway is None or getattr(event, "internal", False):
-        return None
-
-    source = getattr(event, "source", None)
-    if source is None or getattr(source, "chat_type", None) != "dm":
         return None
 
     if _get_secret("FIRST_AGENT_ACCESS_MODE") != "passcode":
         return None
 
+    source = getattr(event, "source", None)
+    if source is None:
+        return None
+
     platform_obj = getattr(source, "platform", None)
     platform = str(getattr(platform_obj, "value", "") or "").strip().lower()
+    chat_type = str(getattr(source, "chat_type", "") or "").strip().lower()
+
+    # LINE passcode mode must enable adapter ingress so an unknown DM can reach
+    # this hook. Do not let that transport-level switch admit LINE groups/rooms.
+    if platform == "line" and chat_type != "dm":
+        return {
+            "action": "skip",
+            "reason": "first-agent-access-line-non-dm",
+        }
+
+    # Preserve Hermes authorization behavior for non-DM traffic on platforms
+    # that do not need the LINE ingress workaround.
+    if chat_type != "dm":
+        return None
+
     user_id = str(getattr(source, "user_id", "") or "").strip()
     if not platform or not user_id:
         return {
@@ -224,8 +286,17 @@ def _pre_gateway_dispatch(event=None, gateway=None, **kwargs):
     except Exception:
         pass
 
+    # First contact is always an onboarding prompt. The greeting itself does
+    # not count as a passcode attempt.
+    if _needs_initial_prompt(platform, user_id):
+        await _send(gateway, source, _PASSCODE_PROMPT)
+        return {
+            "action": "skip",
+            "reason": "first-agent-access-passcode-required",
+        }
+
     if _is_locked(platform, user_id):
-        _send(
+        await _send(
             gateway,
             source,
             "Too many incorrect passcode attempts. Please try again in 15 minutes.",
@@ -234,12 +305,7 @@ def _pre_gateway_dispatch(event=None, gateway=None, **kwargs):
 
     text = str(getattr(event, "text", "") or "").strip()
     if not text or text.startswith("/"):
-        _send(
-            gateway,
-            source,
-            "This Company AI Advisor is for authorized company users. "
-            "Enter the Company Access Passcode to continue.",
-        )
+        await _send(gateway, source, _PASSCODE_PROMPT)
         return {
             "action": "skip",
             "reason": "first-agent-access-passcode-required",
@@ -253,19 +319,18 @@ def _pre_gateway_dispatch(event=None, gateway=None, **kwargs):
             str(getattr(source, "user_name", "") or ""),
         ):
             _clear_failures(platform, user_id)
-            _send(
+            await _send(
                 gateway,
                 source,
                 "Access verified. Your messaging account is now authorized "
                 "for this Agent. Send your request to continue.",
             )
-            # Never forward the passcode itself into the Agent/session transcript.
             return {
                 "action": "skip",
                 "reason": "first-agent-access-approved",
             }
 
-        _send(
+        await _send(
             gateway,
             source,
             "The passcode was valid, but access could not be saved. "
@@ -282,7 +347,7 @@ def _pre_gateway_dispatch(event=None, gateway=None, **kwargs):
         if locked
         else "Passcode incorrect. Please try again."
     )
-    _send(gateway, source, message)
+    await _send(gateway, source, message)
     return {
         "action": "skip",
         "reason": "first-agent-access-passcode-invalid",
