@@ -102,6 +102,13 @@ case "${CONFIRM,,}" in
   *) echo "Cancelled."; exit 0;;
 esac
 
+if [ -f "$SCRIPT_DIR/line-tunnel-update.sh" ]; then
+  if ! bash "$SCRIPT_DIR/line-tunnel-update.sh" --agent-id "$AGENT_ID" --stop-managed; then
+    echo "WARNING: Could not stop the First Agent-managed LINE Quick Tunnel automatically."
+    echo "Other Cloudflare services were not touched."
+  fi
+fi
+
 hermes profile delete "$AGENT_ID" --yes
 
 # Keep a deterministic First Agent reinstall marker even when Hermes versions

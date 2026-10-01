@@ -198,6 +198,7 @@ REQUIRED_FILES=(
   "install.sh"
   "update.sh"
   "uninstall.sh"
+  "line-tunnel-update.sh"
   "scripts/first-agent-helper.py"
   "plugins/first-agent-access/plugin.yaml"
   "plugins/first-agent-access/__init__.py"

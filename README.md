@@ -4,9 +4,9 @@ Private starter distribution for creating an organization's first Hermes **Compa
 
 ## Version
 
-`0.5.0 — Topology-Aware Installer & Lifecycle Hardening`
+`0.5.5 — LINE Public Access Lifecycle`
 
-v0.5 keeps the focused Company AI Advisor introduced in v0.3 and the multi-platform lifecycle introduced in v0.4. The main change is operational: installation now inherits the already-working default Hermes LLM configuration, detects the host gateway topology, allocates a LINE port only when required, and uses non-destructive post-install verification.
+v0.5.5 keeps the focused Company AI Advisor and the v0.5.4 Company Access Passcode flow. It adds an optional LINE public-access step after the gateway is running and a dedicated `line-tunnel-update.sh` lifecycle command. Quick Tunnels are isolated per First Agent and never modify existing Cloudflare services, named tunnels, DNS, or configuration files.
 
 ---
 
@@ -220,21 +220,50 @@ For a **multiplex secondary profile**, the First Agent does not bind its own LIN
 
 The installer detects the topology and prints the correct result.
 
-### Testing LINE without a domain
+### LINE public HTTPS access
 
-For standalone mode, after installation you can use a Cloudflare Quick Tunnel, for example:
+v0.5.5 configures public HTTPS **after** the Hermes gateway is running, so the installer already knows the actual LINE listener port.
 
-```bash
-cloudflared tunnel --url http://localhost:<selected-line-port>
-```
-
-Then configure LINE Developers with the generated HTTPS hostname plus:
+The installer offers:
 
 ```text
-/line/webhook
+1) Cloudflare Quick Tunnel (Testing only)
+2) Existing HTTPS URL / domain
+3) Configure later
 ```
 
-Quick Tunnel is for testing. Production should use a stable managed HTTPS endpoint.
+For standalone/per-profile gateways, option 1 starts an isolated background Quick Tunnel:
+
+```text
+trycloudflare.com
+        ↓
+this First Agent's LINE_PORT
+```
+
+The generated public URL and complete LINE Webhook URL are recorded in `FIRST_AGENT.yaml`; `LINE_PUBLIC_URL` is also written to the profile's private `.env`.
+
+Quick Tunnel ownership is intentionally narrow:
+
+- it does not edit Cloudflare `config.yml`
+- it does not stop/restart any existing cloudflared service
+- it does not modify named tunnels or DNS
+- uninstall stops only the Quick Tunnel PID created for that First Agent
+
+Quick Tunnels are for testing/development. For production, use a stable HTTPS endpoint or managed Cloudflare Tunnel and select **Existing HTTPS URL / domain**.
+
+To change the LINE public endpoint later:
+
+```bash
+bash line-tunnel-update.sh
+```
+
+or:
+
+```bash
+bash line-tunnel-update.sh --agent-id <agent-id>
+```
+
+The command can replace a First Agent-managed Quick Tunnel or record a new externally managed HTTPS domain without reinstalling the Agent.
 
 ## Telegram
 
@@ -368,6 +397,8 @@ Hermes doctor + First Agent LLM smoke test
 Install/start persistent Gateway service
         ↓
 Verify Gateway is running
+        ↓
+Optional LINE public HTTPS setup
 ```
 
 ### Transaction behavior
@@ -602,13 +633,13 @@ In multiplex mode, secondary profiles do not own a LINE listener port; inspect t
 
 ## LINE has no public URL yet
 
-For standalone testing:
+Run:
 
 ```bash
-cloudflared tunnel --url http://localhost:<line-port>
+bash line-tunnel-update.sh --agent-id <agent-id>
 ```
 
-Use the generated HTTPS hostname plus `/line/webhook` in LINE Developers.
+Choose **Cloudflare Quick Tunnel** for temporary testing or **Existing HTTPS URL / domain** for an endpoint managed outside First Agent. The script prints the complete Webhook URL to paste into LINE Developers.
 
 ## Weixin QR setup fails
 

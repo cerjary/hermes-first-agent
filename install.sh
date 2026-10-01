@@ -379,10 +379,6 @@ if [ "$SELECT_LINE" = true ]; then
   say ""; say "Configure LINE"
   read_secret "LINE Channel Access Token" LINE_CHANNEL_ACCESS_TOKEN
   read_secret "LINE Channel Secret" LINE_CHANNEL_SECRET
-  read_optional "Public HTTPS base URL (optional; may be added after install)" "" LINE_PUBLIC_URL
-  if [ -n "$LINE_PUBLIC_URL" ]; then
-    case "$LINE_PUBLIC_URL" in https://*) ;; *) die "LINE Public URL must start with https://";; esac
-  fi
   say "Validating LINE Channel Access Token..."
   if ! printf 'url = "https://api.line.me/v2/bot/info"\nheader = "Authorization: Bearer %s"\nsilent\nshow-error\nfail\nconnect-timeout = 10\nmax-time = 20\n' "$LINE_CHANNEL_ACCESS_TOKEN" \
     | curl --config - >/dev/null; then
@@ -427,6 +423,7 @@ else
 fi
 say "Messaging platforms:"
 [ "$SELECT_LINE" = true ] && say "  - LINE${LINE_PORT:+ (local port $LINE_PORT)}"
+[ "$SELECT_LINE" = true ] && say "    Public HTTPS access is configured after the gateway starts."
 [ "$SELECT_TELEGRAM" = true ] && say "  - Telegram (long polling)"
 [ "$SELECT_WEIXIN" = true ] && say "  - WeChat / Weixin (long polling)"
 say "LLM: inherit current default profile configuration at install time"
@@ -587,6 +584,18 @@ fi
 say ""
 say "Ensuring messaging gateway is installed and running..."
 ensure_gateway_service "$GATEWAY_TOPOLOGY" || true
+
+if [ "$SELECT_LINE" = true ]; then
+  say ""
+  say "LINE public HTTPS access"
+  if bash "$SCRIPT_DIR/line-tunnel-update.sh" --agent-id "$AGENT_ID" --initial; then
+    LINE_PUBLIC_URL="$("$HERMES_PYTHON" "$HELPER" line-info --path "$PROFILE_HOME/FIRST_AGENT.yaml" --field public_url 2>/dev/null || true)"
+  else
+    say "WARNING: LINE public HTTPS setup did not complete. The First Agent profile and gateway were kept."
+    say "Retry later: bash $SCRIPT_DIR/line-tunnel-update.sh --agent-id $AGENT_ID"
+    VERIFY_WARNINGS=$((VERIFY_WARNINGS+1))
+  fi
+fi
 
 say ""
 if [ "$VERIFY_WARNINGS" -eq 0 ]; then

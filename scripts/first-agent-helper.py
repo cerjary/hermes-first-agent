@@ -350,6 +350,81 @@ def command_write_manifest(args):
     atomic_write_yaml(Path(args.path).expanduser().resolve(), data)
 
 
+def _line_webhook_path(data):
+    agent_id = str(data.get("agent_id") or "").strip()
+    topology = str(data.get("gateway_topology") or "").strip()
+    if topology == "multiplex":
+        return f"/p/{agent_id}/line/webhook"
+    return "/line/webhook"
+
+
+def _load_line_manifest(path):
+    data = load_yaml(path)
+    if not isinstance(data, dict):
+        raise SystemExit("Manifest is not a YAML mapping")
+    if data.get("source") != "cerjary/hermes-first-agent":
+        raise SystemExit("Profile source does not match hermes-first-agent")
+    gateways = data.get("gateways")
+    if not isinstance(gateways, list) or "line" not in gateways:
+        raise SystemExit("This First Agent does not have LINE enabled")
+    return data
+
+
+def command_line_info(args):
+    path = Path(args.path).expanduser().resolve()
+    data = _load_line_manifest(path)
+    state = data.get("line_public_access")
+    if not isinstance(state, dict):
+        state = {}
+    webhook_path = _line_webhook_path(data)
+    public_url = str(state.get("public_url") or "").rstrip("/")
+    values = {
+        "agent_id": str(data.get("agent_id") or ""),
+        "display_name": str(data.get("display_name") or data.get("agent_id") or ""),
+        "topology": str(data.get("gateway_topology") or ""),
+        "line_port": str(data.get("line_port") or ""),
+        "mode": str(state.get("mode") or "unconfigured"),
+        "managed_by": str(state.get("managed_by") or "none"),
+        "public_url": public_url,
+        "webhook_path": webhook_path,
+        "webhook_url": f"{public_url}{webhook_path}" if public_url else "",
+    }
+    print(values[args.field])
+
+
+def command_set_line_public_access(args):
+    manifest_path = Path(args.path).expanduser().resolve()
+    env_path = Path(args.env_path).expanduser().resolve()
+    data = _load_line_manifest(manifest_path)
+
+    public_url = (args.public_url or "").strip().rstrip("/")
+    if public_url and not public_url.startswith("https://"):
+        raise SystemExit("LINE public URL must start with https://")
+    if args.mode == "unconfigured":
+        public_url = ""
+
+    webhook_path = _line_webhook_path(data)
+    state = {
+        "mode": args.mode,
+        "managed_by": args.managed_by,
+        "public_url": public_url,
+        "webhook_path": webhook_path,
+        "webhook_url": f"{public_url}{webhook_path}" if public_url else "",
+    }
+    data["line_public_access"] = state
+    atomic_write_yaml(manifest_path, data)
+
+    env = parse_env(env_path)
+    if public_url:
+        env["LINE_PUBLIC_URL"] = public_url
+    else:
+        env.pop("LINE_PUBLIC_URL", None)
+    write_env(env_path, env)
+
+    if state["webhook_url"]:
+        print(state["webhook_url"])
+
+
 def command_hash_passcode(args):
     passcode = sys.stdin.read()
     if "\n" in passcode or "\r" in passcode:
@@ -451,6 +526,33 @@ def build_parser():
     p.add_argument("--platform", action="append", default=[])
     p.add_argument("--line-port", default="")
     p.set_defaults(func=command_write_manifest)
+
+    p = sub.add_parser("line-info")
+    p.add_argument("--path", required=True)
+    p.add_argument(
+        "--field",
+        required=True,
+        choices=(
+            "agent_id",
+            "display_name",
+            "topology",
+            "line_port",
+            "mode",
+            "managed_by",
+            "public_url",
+            "webhook_path",
+            "webhook_url",
+        ),
+    )
+    p.set_defaults(func=command_line_info)
+
+    p = sub.add_parser("set-line-public-access")
+    p.add_argument("--path", required=True)
+    p.add_argument("--env-path", required=True)
+    p.add_argument("--mode", required=True, choices=("cloudflare_quick", "external", "unconfigured"))
+    p.add_argument("--managed-by", required=True, choices=("first-agent", "user", "none"))
+    p.add_argument("--public-url", default="")
+    p.set_defaults(func=command_set_line_public_access)
 
     p = sub.add_parser("hash-passcode")
     p.set_defaults(func=command_hash_passcode)

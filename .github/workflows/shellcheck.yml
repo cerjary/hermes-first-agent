@@ -23,11 +23,11 @@ jobs:
 
       - name: Bash syntax
         run: |
-          bash -n check-environment.sh install.sh update.sh uninstall.sh
+          bash -n check-environment.sh install.sh update.sh uninstall.sh line-tunnel-update.sh
 
       - name: ShellCheck
         run: |
-          shellcheck check-environment.sh install.sh update.sh uninstall.sh
+          shellcheck check-environment.sh install.sh update.sh uninstall.sh line-tunnel-update.sh
 
       - name: Python syntax
         run: |

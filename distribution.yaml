@@ -1,6 +1,6 @@
 name: first-agent
-version: 0.5.4
-description: "Focused Hermes Company AI Advisor with default-LLM inheritance, topology-aware messaging, and hardened lifecycle management."
+version: 0.5.5
+description: "Focused Hermes Company AI Advisor with profile-scoped access control and LINE public-access lifecycle management."
 hermes_requires: ">=0.21.0"
 author: "cerjary"
 license: "Proprietary"
@@ -15,7 +15,7 @@ env_requires:
     description: "Testing-only LINE allow-all switch; normal First Agent installs use Company passcode"
     required: false
   - name: LINE_PUBLIC_URL
-    description: "Public HTTPS base URL for LINE webhook/media; may be configured after installation"
+    description: "Public HTTPS base URL for LINE webhook/media; managed by line-tunnel-update.sh or supplied externally"
     required: false
   - name: LINE_PORT
     description: "Standalone LINE listener port; automatically selected when required"
