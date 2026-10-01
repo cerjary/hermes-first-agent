@@ -370,6 +370,37 @@ def command_verify_manifest(args):
     print(data.get("version", "unknown"))
 
 
+def command_list_first_agents(args):
+    profiles_dir = Path(args.hermes_root).expanduser().resolve() / "profiles"
+    if not profiles_dir.is_dir():
+        return
+
+    rows = []
+    for profile_dir in profiles_dir.iterdir():
+        if not profile_dir.is_dir() or profile_dir.name.startswith("."):
+            continue
+        manifest = profile_dir / "FIRST_AGENT.yaml"
+        if not manifest.is_file():
+            continue
+        try:
+            data = load_yaml(manifest)
+        except Exception:
+            continue
+        if not isinstance(data, dict):
+            continue
+        agent_id = str(data.get("agent_id") or "").strip()
+        if data.get("source") != "cerjary/hermes-first-agent":
+            continue
+        if agent_id != profile_dir.name:
+            continue
+        display_name = str(data.get("display_name") or agent_id).replace("\t", " ").replace("\n", " ").strip()
+        version = str(data.get("version") or "unknown").replace("\t", " ").replace("\n", " ").strip()
+        rows.append((agent_id, display_name, version))
+
+    for agent_id, display_name, version in sorted(rows):
+        print(f"{agent_id}\t{display_name}\t{version}")
+
+
 def build_parser():
     parser = argparse.ArgumentParser(description="Hermes First Agent installer helper")
     sub = parser.add_subparsers(dest="command", required=True)
@@ -416,6 +447,10 @@ def build_parser():
     p.add_argument("--path", required=True)
     p.add_argument("--agent-id", required=True)
     p.set_defaults(func=command_verify_manifest)
+
+    p = sub.add_parser("list-first-agents")
+    p.add_argument("--hermes-root", required=True)
+    p.set_defaults(func=command_list_first_agents)
     return parser
 
 

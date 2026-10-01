@@ -1,5 +1,5 @@
 name: first-agent
-version: 0.5.1
+version: 0.5.2
 description: "Focused Hermes Company AI Advisor with default-LLM inheritance, topology-aware messaging, and hardened lifecycle management."
 hermes_requires: ">=0.21.0"
 author: "cerjary"

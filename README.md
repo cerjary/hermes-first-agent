@@ -383,7 +383,7 @@ Example:
 
 ```yaml
 source: cerjary/hermes-first-agent
-version: 0.5.1
+version: 0.5.2
 agent_id: acme-ai-advisor
 display_name: ACME AI Advisor
 tenant_code: acme
@@ -499,11 +499,12 @@ bash uninstall.sh
 
 The script:
 
-- validates Agent ID format
-- verifies the profile's First Agent `source`
-- verifies the manifest `agent_id` matches the requested profile
-- requires exact Agent ID confirmation before deletion
-- does not delete the default profile or unrelated Hermes profiles
+- discovers installed profiles created by `cerjary/hermes-first-agent`
+- lists only profiles whose `FIRST_AGENT.yaml` source and `agent_id` are valid
+- lets the user select the First Agent by number; the user does not need to remember the Agent ID
+- shows the selected display name, Agent ID, and installed version before deletion
+- requires an explicit yes/no confirmation before permanent deletion
+- does not list or delete the default profile or unrelated Hermes profiles
 
 Optional profile exports are stored under:
 
