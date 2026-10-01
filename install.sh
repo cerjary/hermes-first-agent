@@ -212,8 +212,10 @@ has_default_gateway_process(){
 }
 
 wait_for_gateway_process(){
-  local profile="$1" i
-  for i in 1 2 3 4 5 6 7 8 9 10; do
+  local profile="$1"
+  local attempt
+  for attempt in 1 2 3 4 5 6 7 8 9 10; do
+    : "$attempt"
     if [ "$profile" = "default" ]; then
       has_default_gateway_process && return 0
     else
