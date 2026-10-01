@@ -4,9 +4,9 @@ Private starter distribution for creating an organization's first Hermes **Compa
 
 ## Version
 
-`0.5.7 — Hermes 0.21 Passcode Compatibility Fix`
+`0.5.8 — Retained Passcode Reply Delivery`
 
-v0.5.7 keeps the v0.5.6 first-contact Company Access Passcode state machine and fixes compatibility with Hermes 0.21.x gateways. The passcode hook remains synchronous because Hermes 0.21.0-0.21.4 invoke pre_gateway_dispatch synchronously; access-control replies are scheduled on the running gateway loop and their completion is observed so delivery failures are logged.
+v0.5.8 keeps the first-contact Company Access Passcode state machine and Hermes 0.21.x synchronous hook compatibility, while routing access-control replies through Hermes' own background-task tracker. This keeps a strong reference to each reply coroutine until it completes, preventing a passcode prompt from disappearing after the hook correctly blocks the inbound message.
 
 ---
 
@@ -443,7 +443,7 @@ Example:
 
 ```yaml
 source: cerjary/hermes-first-agent
-version: 0.5.7
+version: 0.5.8
 agent_id: acme-ai-advisor
 display_name: ACME AI Advisor
 tenant_code: acme
