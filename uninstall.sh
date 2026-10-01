@@ -104,6 +104,14 @@ esac
 
 hermes profile delete "$AGENT_ID" --yes
 
+# Keep a deterministic First Agent reinstall marker even when Hermes versions
+# differ in whether profile delete leaves their internal tombstone behind.
+DELETED_DIR="$HERMES_ROOT/profiles/.deleted"
+mkdir -p "$DELETED_DIR"
+chmod 700 "$DELETED_DIR"
+: > "$DELETED_DIR/$AGENT_ID"
+chmod 600 "$DELETED_DIR/$AGENT_ID"
+
 echo "First Agent $AGENT_ID has been removed."
 if [ -e "$HERMES_ROOT/profiles/.deleted/$AGENT_ID" ]; then
   echo "Hermes kept an internal deletion marker for this profile."

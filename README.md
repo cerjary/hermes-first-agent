@@ -175,6 +175,8 @@ The authorization is profile-scoped. It applies only to this First Agent. Other 
 
 Company passcode mode does **not** set the messaging platform to global allow-all. If the First Agent access plugin cannot authorize a sender, Hermes' own authorization remains the final gate.
 
+The passcode hook is intentionally synchronous for Hermes 0.21.x `pre_gateway_dispatch` compatibility; platform replies are scheduled onto the gateway's running event loop.
+
 ## LINE
 
 Prepare:

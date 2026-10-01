@@ -1,4 +1,5 @@
 import importlib.util
+import inspect
 import pathlib
 import unittest
 
@@ -16,6 +17,9 @@ SPEC.loader.exec_module(MODULE)
 
 
 class CompanyPasscodeTests(unittest.TestCase):
+    def test_pre_gateway_dispatch_is_synchronous(self):
+        self.assertFalse(inspect.iscoroutinefunction(MODULE._pre_gateway_dispatch))
+
     def test_hash_round_trip(self):
         salt = "00112233445566778899aabbccddeeff"
         iterations = 1000

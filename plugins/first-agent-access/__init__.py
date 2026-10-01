@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import hashlib
 import json
 import os
@@ -137,15 +138,21 @@ def _clear_failures(platform: str, user_id: str) -> None:
             _write_state(state)
 
 
-async def _send(gateway: Any, source: Any, message: str) -> None:
+def _send(gateway: Any, source: Any, message: str) -> None:
+    """Schedule a platform reply from Hermes' synchronous pre-dispatch hook."""
     adapter = None
     try:
         adapter = gateway._delivery_adapter_for(source)
     except Exception:
         adapters = getattr(gateway, "adapters", None) or {}
         adapter = adapters.get(getattr(source, "platform", None))
-    if adapter is not None:
-        await adapter.send(source.chat_id, message)
+    if adapter is None:
+        return
+    try:
+        loop = asyncio.get_running_loop()
+    except RuntimeError:
+        return
+    loop.create_task(adapter.send(source.chat_id, message))
 
 
 def _pairing_store(gateway: Any, source: Any):
@@ -189,7 +196,7 @@ def _approve_user(
     return False
 
 
-async def _pre_gateway_dispatch(event=None, gateway=None, **kwargs):
+def _pre_gateway_dispatch(event=None, gateway=None, **kwargs):
     del kwargs
     if event is None or gateway is None or getattr(event, "internal", False):
         return None
@@ -218,7 +225,7 @@ async def _pre_gateway_dispatch(event=None, gateway=None, **kwargs):
         pass
 
     if _is_locked(platform, user_id):
-        await _send(
+        _send(
             gateway,
             source,
             "Too many incorrect passcode attempts. Please try again in 15 minutes.",
@@ -227,7 +234,7 @@ async def _pre_gateway_dispatch(event=None, gateway=None, **kwargs):
 
     text = str(getattr(event, "text", "") or "").strip()
     if not text or text.startswith("/"):
-        await _send(
+        _send(
             gateway,
             source,
             "This Company AI Advisor is for authorized company users. "
@@ -246,7 +253,7 @@ async def _pre_gateway_dispatch(event=None, gateway=None, **kwargs):
             str(getattr(source, "user_name", "") or ""),
         ):
             _clear_failures(platform, user_id)
-            await _send(
+            _send(
                 gateway,
                 source,
                 "Access verified. Your messaging account is now authorized "
@@ -258,7 +265,7 @@ async def _pre_gateway_dispatch(event=None, gateway=None, **kwargs):
                 "reason": "first-agent-access-approved",
             }
 
-        await _send(
+        _send(
             gateway,
             source,
             "The passcode was valid, but access could not be saved. "
