@@ -4,9 +4,9 @@ Private starter distribution for creating an organization's first Hermes **Compa
 
 ## Version
 
-`0.5.8 — Retained Passcode Reply Delivery`
+`0.5.9 — Direct LINE Passcode Reply Delivery`
 
-v0.5.8 keeps the first-contact Company Access Passcode state machine and Hermes 0.21.x synchronous hook compatibility, while routing access-control replies through Hermes' own background-task tracker. This keeps a strong reference to each reply coroutine until it completes, preventing a passcode prompt from disappearing after the hook correctly blocks the inbound message.
+v0.5.9 keeps the first-contact Company Access Passcode state machine and Hermes 0.21.x synchronous hook compatibility. LINE passcode control messages now use the inbound webhook replyToken directly through the LINE Messaging API, with push fallback when the reply token cannot be used. This keeps pre-auth control-plane delivery independent from Hermes' async adapter lifecycle while normal Agent replies continue to use Hermes.
 
 ---
 
@@ -443,7 +443,7 @@ Example:
 
 ```yaml
 source: cerjary/hermes-first-agent
-version: 0.5.8
+version: 0.5.9
 agent_id: acme-ai-advisor
 display_name: ACME AI Advisor
 tenant_code: acme
