@@ -18,6 +18,7 @@ LOCK_SECONDS = 15 * 60
 MAX_FAILURES = 5
 _STATE_LOCK = threading.RLock()
 logger = logging.getLogger(__name__)
+_SEND_TASKS: set[asyncio.Task] = set()
 
 _PASSCODE_PROMPT = (
     "This Company AI Advisor is for authorized company users. "
@@ -171,10 +172,11 @@ def _clear_failures(platform: str, user_id: str) -> None:
             _write_state(state)
 
 
-def _log_send_result(task: asyncio.Task, platform: Any) -> None:
+async def _deliver_reply(adapter: Any, source: Any, message: str) -> None:
+    platform = getattr(source, "platform", None)
     try:
-        result = task.result()
-    except Exception:
+        result = await adapter.send(source.chat_id, message)
+    except BaseException:
         logger.warning(
             "First Agent access reply raised while sending to %s",
             platform,
@@ -191,11 +193,12 @@ def _log_send_result(task: asyncio.Task, platform: Any) -> None:
 
 
 def _send(gateway: Any, source: Any, message: str) -> bool:
-    """Schedule an access-control reply on Hermes' running gateway loop.
+    """Schedule an access-control reply and retain it until completion.
 
-    Hermes 0.21.0-0.21.4 invokes pre_gateway_dispatch synchronously from the
-    gateway event loop. Keep this hook synchronous for compatibility and
-    observe the scheduled send result via a done callback.
+    Hermes 0.21.x invokes pre_gateway_dispatch synchronously from the running
+    gateway loop. Reuse Hermes' own background-task tracker when available so
+    the send coroutine keeps a strong reference until it finishes. A local
+    retained-task set is the compatibility fallback.
     """
     adapter = None
     try:
@@ -218,9 +221,21 @@ def _send(gateway: Any, source: Any, message: str) -> bool:
         )
         return False
 
-    platform = getattr(source, "platform", None)
-    task = loop.create_task(adapter.send(source.chat_id, message))
-    task.add_done_callback(lambda done: _log_send_result(done, platform))
+    coro = _deliver_reply(adapter, source, message)
+    tracker = getattr(gateway, "_track_background_task", None)
+    if callable(tracker):
+        try:
+            tracker(coro)
+            return True
+        except Exception:
+            logger.warning(
+                "Hermes background-task tracker failed; using local retained task",
+                exc_info=True,
+            )
+
+    task = loop.create_task(coro)
+    _SEND_TASKS.add(task)
+    task.add_done_callback(_SEND_TASKS.discard)
     return True
 
 
