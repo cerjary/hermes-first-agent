@@ -8,6 +8,18 @@ HELPER="$SCRIPT_DIR/scripts/first-agent-helper.py"
 die(){ printf 'ERROR: %s\n' "$*" >&2; exit 1; }
 validate_agent_id(){ [[ "$1" =~ ^[a-z0-9]+(-[a-z0-9]+)*$ ]] || die "Agent ID must use lowercase letters, numbers, and single hyphens only."; }
 
+upsert_env_line(){
+  local file="$1" key="$2" value="$3" tmp
+  tmp="$(mktemp "${TMPDIR:-/tmp}/first-agent-env.XXXXXX")"
+  if [ -f "$file" ]; then
+    grep -v -E "^${key}=" "$file" > "$tmp" || true
+  fi
+  printf '%s=%s\n' "$key" "$value" >> "$tmp"
+  chmod 600 "$tmp"
+  mv "$tmp" "$file"
+  chmod 600 "$file"
+}
+
 find_hermes_install_dir(){
   local raw dir
   raw="$(hermes --version 2>/dev/null || true)"
@@ -51,6 +63,43 @@ has_default_gateway_process(){
     }
     END { exit found ? 0 : 1 }
   '
+}
+
+
+wait_for_profile_gateway_process(){
+  local attempt
+  for attempt in 1 2 3 4 5 6 7 8 9 10; do
+    : "$attempt"
+    has_profile_gateway_process "$AGENT_ID" && return 0
+    sleep 1
+  done
+  return 1
+}
+
+restart_updated_gateway(){
+  local topology="$1"
+  if [ "$topology" = "multiplex" ]; then
+    echo "WARNING: This First Agent uses a shared multiplex gateway."
+    echo "The profile was updated, but the shared gateway was not restarted automatically."
+    echo "Restart it in a maintenance window with: hermes gateway restart"
+    return 1
+  fi
+
+  if has_profile_gateway_process "$AGENT_ID"; then
+    echo "Restarting gateway for $AGENT_ID so updated plugins and env are loaded..."
+    if ! hermes -p "$AGENT_ID" gateway restart; then
+      echo "WARNING: Gateway restart failed."
+      return 1
+    fi
+    if ! wait_for_profile_gateway_process; then
+      echo "WARNING: Gateway restart returned, but no running profile gateway was detected."
+      return 1
+    fi
+    echo "Gateway restarted."
+    return 0
+  fi
+
+  reconcile_gateway_service "$topology"
 }
 
 manifest_gateway_topology(){
@@ -118,6 +167,17 @@ TARGET_VERSION="$(tr -d '[:space:]' < "$SCRIPT_DIR/VERSION")"
 echo "Updating $AGENT_ID to First Agent v$TARGET_VERSION..."
 hermes profile update "$AGENT_ID" --yes
 
+# v0.5.6 migration: Hermes LINE performs its transport allowlist check before
+# pre_gateway_dispatch. Company-passcode LINE profiles therefore need adapter
+# ingress enabled so unknown DMs can reach the First Agent access hook.
+ENV_FILE="$PROFILE_HOME/.env"
+if [ -f "$ENV_FILE" ] \
+  && grep -qx 'FIRST_AGENT_ACCESS_MODE=passcode' "$ENV_FILE" \
+  && grep -q '^LINE_CHANNEL_ACCESS_TOKEN=.' "$ENV_FILE"; then
+  upsert_env_line "$ENV_FILE" LINE_ALLOW_ALL_USERS true
+  echo "Migrated LINE passcode ingress for the existing profile."
+fi
+
 # Distribution updates intentionally preserve user-owned config/.env/memory.
 # LLM inheritance is install-time only; an update does not silently follow
 # later changes made to the default profile.
@@ -126,7 +186,7 @@ chmod 600 "$MANIFEST"
 
 GATEWAY_TOPOLOGY="$(manifest_gateway_topology)"
 GATEWAY_WARNING=0
-reconcile_gateway_service "$GATEWAY_TOPOLOGY" || GATEWAY_WARNING=1
+restart_updated_gateway "$GATEWAY_TOPOLOGY" || GATEWAY_WARNING=1
 
 if [ "$GATEWAY_WARNING" -eq 0 ]; then
   echo "Update complete. Gateway is running or already managed."
@@ -134,4 +194,4 @@ else
   echo "Update complete with a gateway warning; the Agent profile was kept."
 fi
 echo "Preserved: config.yaml, .env, LLM selection, memories, sessions, and credentials."
-echo "Updated: distribution-owned SOUL/Skills and First Agent release metadata."
+echo "Updated: distribution-owned SOUL/Skills/plugins, First Agent release metadata, and required access migrations."
