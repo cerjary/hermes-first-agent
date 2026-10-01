@@ -1,6 +1,6 @@
 name: first-agent
-version: 0.5.7
-description: "Focused Hermes Company AI Advisor with first-contact passcode onboarding, Hermes 0.21.x synchronous hook compatibility, and LINE public-access lifecycle management."
+version: 0.5.8
+description: "Focused Hermes Company AI Advisor with first-contact passcode onboarding, retained gateway reply tasks for Hermes 0.21.x, and LINE public-access lifecycle management."
 hermes_requires: ">=0.21.0"
 author: "cerjary"
 license: "Proprietary"
