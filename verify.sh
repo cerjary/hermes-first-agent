@@ -136,10 +136,21 @@ PY
 }
 
 telegram_token_valid(){
-  local token="$1"
-  printf 'url = "https://api.telegram.org/bot%s/getMe"\nsilent\nshow-error\nfail\nconnect-timeout = 10\nmax-time = 20\n' "$token" \
-    | curl --config - 2>/dev/null \
-    | grep -q '"ok"[[:space:]]*:[[:space:]]*true'
+  local token="$1" response
+  if ! response="$(
+    printf 'url = "https://api.telegram.org/bot%s/getMe"\nsilent\nshow-error\nfail\nconnect-timeout = 10\nmax-time = 20\n' "$token" \
+      | curl --config - 2>/dev/null
+  )"; then
+    return 1
+  fi
+  "$HERMES_PYTHON" -c '
+import json, sys
+try:
+    data = json.load(sys.stdin)
+except Exception:
+    raise SystemExit(1)
+raise SystemExit(0 if data.get("ok") is True else 1)
+' <<< "$response"
 }
 
 [ -f "$HELPER" ] || die "First Agent lifecycle helper not found: $HELPER"
