@@ -346,7 +346,19 @@ case "$ACCESS_SELECTION" in
     read_secret "Confirm company access passcode" COMPANY_PASSCODE_CONFIRM
     [ "$COMPANY_PASSCODE" = "$COMPANY_PASSCODE_CONFIRM" ] || die "Company passcode confirmation did not match."
     PASSCODE_META="$(printf '%s' "$COMPANY_PASSCODE" | "$HERMES_PYTHON" "$HELPER" hash-passcode)"
-    IFS=if [ "$SELECT_LINE" = true ] && [ "$GATEWAY_TOPOLOGY" = "multiplex" ]; then
+    IFS=: read -r ACCESS_PASSCODE_SALT ACCESS_PASSCODE_HASH ACCESS_PASSCODE_ITERATIONS <<< "$PASSCODE_META"
+    [ -n "$ACCESS_PASSCODE_SALT" ] && [ -n "$ACCESS_PASSCODE_HASH" ] && [ -n "$ACCESS_PASSCODE_ITERATIONS" ] || die "Could not derive company passcode hash."
+    unset COMPANY_PASSCODE COMPANY_PASSCODE_CONFIRM PASSCODE_META
+    ;;
+  2)
+    ACCESS_MODE="allow_all"
+    ACCESS_ALLOW_ALL=true
+    ;;
+  *) die "Invalid access-control selection";;
+esac
+
+SHARED_LISTENER_PORT=""
+if [ "$SELECT_LINE" = true ] && [ "$GATEWAY_TOPOLOGY" = "multiplex" ]; then
   if SHARED_LISTENER_PORT="$("$HERMES_PYTHON" "$HELPER" shared-listener-port --hermes-root "$HERMES_ROOT" 2>/dev/null)"; then
     say "Multiplex shared HTTP listener detected on port $SHARED_LISTENER_PORT."
   else
