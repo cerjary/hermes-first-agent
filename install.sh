@@ -638,3 +638,8 @@ case "$GATEWAY_TOPOLOGY" in
     ;;
 esac
 say "One Agent Profile, Many Messaging Platforms, Many Sessions."
+say ""
+say "Lifecycle commands:"
+say "  Verify:            bash $SCRIPT_DIR/verify.sh --agent-id $AGENT_ID"
+say "  Messaging repair:  bash $SCRIPT_DIR/configure-messaging.sh --agent-id $AGENT_ID"
+[ "$SELECT_LINE" = true ] && say "  LINE public URL:   bash $SCRIPT_DIR/line-tunnel-update.sh --agent-id $AGENT_ID"
