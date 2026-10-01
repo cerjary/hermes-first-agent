@@ -184,6 +184,91 @@ detect_gateway_topology(){
   fi
 }
 
+
+has_profile_gateway_process(){
+  local profile="$1"
+  ps -eo args= 2>/dev/null | awk -v target="$profile" '
+    /gateway[[:space:]]+run/ {
+      for (i = 1; i <= NF; i++) {
+        if (($i == "-p" || $i == "--profile") && (i + 1) <= NF && $(i + 1) == target) found = 1
+        if ($i ~ /^--profile=/) { split($i, p, "="); if (p[2] == target) found = 1 }
+      }
+    }
+    END { exit found ? 0 : 1 }
+  '
+}
+
+has_default_gateway_process(){
+  ps -eo args= 2>/dev/null | awk '
+    /gateway[[:space:]]+run/ {
+      named = 0
+      for (i = 1; i <= NF; i++) {
+        if ($i == "-p" || $i == "--profile" || $i ~ /^--profile=/) named = 1
+      }
+      if (!named) found = 1
+    }
+    END { exit found ? 0 : 1 }
+  '
+}
+
+wait_for_gateway_process(){
+  local profile="$1" i
+  for i in 1 2 3 4 5 6 7 8 9 10; do
+    if [ "$profile" = "default" ]; then
+      has_default_gateway_process && return 0
+    else
+      has_profile_gateway_process "$profile" && return 0
+    fi
+    sleep 1
+  done
+  return 1
+}
+
+ensure_gateway_service(){
+  local topology="$1" target_profile retry_cmd
+  local -a install_cmd
+
+  if [ "$topology" = "multiplex" ]; then
+    target_profile="default"
+    if has_default_gateway_process; then
+      say "Host multiplex gateway is already running; leaving it in place."
+      return 0
+    fi
+    install_cmd=(hermes gateway install --start-now --start-on-login)
+    retry_cmd="hermes gateway install --start-now --start-on-login"
+    say "Installing and starting the host multiplex gateway service..."
+  else
+    target_profile="$AGENT_ID"
+    if has_profile_gateway_process "$AGENT_ID"; then
+      say "Gateway for $AGENT_ID is already running; leaving the existing process in place."
+      return 0
+    fi
+    install_cmd=(hermes -p "$AGENT_ID" gateway install --start-now --start-on-login)
+    if [ "$topology" = "standalone-compat" ]; then
+      install_cmd+=(--force)
+    fi
+    retry_cmd="hermes -p $AGENT_ID gateway install --start-now --start-on-login"
+    say "Installing and starting the gateway service for $AGENT_ID..."
+  fi
+
+  if ! "${install_cmd[@]}"; then
+    say "WARNING: Gateway service installation/start failed. The First Agent profile was kept."
+    say "Retry manually: $retry_cmd"
+    VERIFY_WARNINGS=$((VERIFY_WARNINGS+1))
+    return 1
+  fi
+
+  if ! wait_for_gateway_process "$target_profile"; then
+    say "WARNING: Gateway service command completed, but no running gateway process was detected."
+    say "Check manually: ${retry_cmd% install*} status"
+    VERIFY_WARNINGS=$((VERIFY_WARNINGS+1))
+    return 1
+  fi
+
+  say "Gateway is installed and running."
+  return 0
+}
+
 [ -f "$SCRIPT_DIR/check-environment.sh" ] || die "check-environment.sh not found"
 [ -f "$SCRIPT_DIR/scripts/first-agent-helper.py" ] || die "scripts/first-agent-helper.py not found"
 say "Running environment preflight..."
@@ -446,6 +531,10 @@ if ! hermes -p "$AGENT_ID" chat -q "請用一句話說明你的職責範圍。" 
 fi
 
 say ""
+say "Ensuring messaging gateway is installed and running..."
+ensure_gateway_service "$GATEWAY_TOPOLOGY" || true
+
+say ""
 if [ "$VERIFY_WARNINGS" -eq 0 ]; then
   say "Installation complete and verified."
 else
@@ -455,8 +544,8 @@ say "Agent ID: $AGENT_ID"
 case "$GATEWAY_TOPOLOGY" in
   multiplex)
     say "Gateway mode: shared host multiplexer"
+    say "Gateway lifecycle: managed automatically by the installer"
     say "Check host gateway: hermes gateway status"
-    say "Install/start host gateway if needed: hermes gateway install"
     if [ "$SELECT_LINE" = true ]; then
       LINE_PATH="/p/$AGENT_ID/line/webhook"
       [ -n "$SHARED_LISTENER_PORT" ] && say "Shared local listener port: $SHARED_LISTENER_PORT"
@@ -466,8 +555,8 @@ case "$GATEWAY_TOPOLOGY" in
     ;;
   *)
     say "Gateway mode: per-profile standalone"
-    say "Start gateway: hermes -p $AGENT_ID gateway"
-    say "Install persistent gateway service: hermes -p $AGENT_ID gateway install"
+    say "Gateway lifecycle: persistent service installed/started automatically when supported"
+    say "Check gateway: hermes -p $AGENT_ID gateway status"
     if [ "$SELECT_LINE" = true ]; then
       say "LINE local port: $LINE_PORT"
       say "LINE webhook path: /line/webhook"

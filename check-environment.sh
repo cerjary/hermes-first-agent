@@ -227,7 +227,7 @@ if command -v git >/dev/null 2>&1 && git -C "$SCRIPT_DIR" rev-parse --is-inside-
     fi
 
     if GIT_TERMINAL_PROMPT=0 git -C "$SCRIPT_DIR" ls-remote --exit-code origin HEAD >/dev/null 2>&1; then
-      pass "Private repository access verified"
+      pass "Repository remote access verified"
     else
       warn "Cannot verify private repository access; future updates may fail"
     fi

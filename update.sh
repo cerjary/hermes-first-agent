@@ -26,6 +26,74 @@ find_hermes_python(){
   return 1
 }
 
+
+has_profile_gateway_process(){
+  local profile="$1"
+  ps -eo args= 2>/dev/null | awk -v target="$profile" '
+    /gateway[[:space:]]+run/ {
+      for (i = 1; i <= NF; i++) {
+        if (($i == "-p" || $i == "--profile") && (i + 1) <= NF && $(i + 1) == target) found = 1
+        if ($i ~ /^--profile=/) { split($i, p, "="); if (p[2] == target) found = 1 }
+      }
+    }
+    END { exit found ? 0 : 1 }
+  '
+}
+
+has_default_gateway_process(){
+  ps -eo args= 2>/dev/null | awk '
+    /gateway[[:space:]]+run/ {
+      named = 0
+      for (i = 1; i <= NF; i++) {
+        if ($i == "-p" || $i == "--profile" || $i ~ /^--profile=/) named = 1
+      }
+      if (!named) found = 1
+    }
+    END { exit found ? 0 : 1 }
+  '
+}
+
+manifest_gateway_topology(){
+  "$HERMES_PYTHON" - "$MANIFEST" <<'PY'
+import sys, yaml
+with open(sys.argv[1], encoding="utf-8") as f:
+    data = yaml.safe_load(f) or {}
+value = data.get("gateway_topology") or "standalone"
+if value not in {"standalone", "standalone-compat", "multiplex"}:
+    raise SystemExit(f"Unsupported gateway_topology in manifest: {value}")
+print(value)
+PY
+}
+
+reconcile_gateway_service(){
+  local topology="$1"
+  local -a cmd
+
+  if [ "$topology" = "multiplex" ]; then
+    if has_default_gateway_process; then
+      echo "Host multiplex gateway is already running; leaving it in place."
+      return 0
+    fi
+    cmd=(hermes gateway install --start-now --start-on-login)
+  else
+    if has_profile_gateway_process "$AGENT_ID"; then
+      echo "Gateway for $AGENT_ID is already running; leaving the existing process in place."
+      return 0
+    fi
+    cmd=(hermes -p "$AGENT_ID" gateway install --start-now --start-on-login)
+    if [ "$topology" = "standalone-compat" ]; then
+      cmd+=(--force)
+    fi
+  fi
+
+  echo "Installing/starting gateway service for topology: $topology"
+  if ! "${cmd[@]}"; then
+    echo "WARNING: Gateway service could not be installed/started automatically."
+    return 1
+  fi
+  return 0
+}
+
 read -r -p "Agent ID to update: " AGENT_ID
 [ -n "$AGENT_ID" ] || die "Agent ID is required"
 validate_agent_id "$AGENT_ID"
@@ -56,6 +124,14 @@ hermes profile update "$AGENT_ID" --yes
 "$HERMES_PYTHON" "$HELPER" set-manifest-version --path "$MANIFEST" --version "$TARGET_VERSION"
 chmod 600 "$MANIFEST"
 
-echo "Update complete."
+GATEWAY_TOPOLOGY="$(manifest_gateway_topology)"
+GATEWAY_WARNING=0
+reconcile_gateway_service "$GATEWAY_TOPOLOGY" || GATEWAY_WARNING=1
+
+if [ "$GATEWAY_WARNING" -eq 0 ]; then
+  echo "Update complete. Gateway is running or already managed."
+else
+  echo "Update complete with a gateway warning; the Agent profile was kept."
+fi
 echo "Preserved: config.yaml, .env, LLM selection, memories, sessions, and credentials."
 echo "Updated: distribution-owned SOUL/Skills and First Agent release metadata."

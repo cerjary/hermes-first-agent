@@ -89,7 +89,7 @@ Before running `install.sh`, prepare:
 - [ ] `hermes chat -q "Reply only: OK"` works
 - [ ] Git is installed
 - [ ] curl is installed
-- [ ] You have access to this private repository
+- [ ] This repository is reachable from the installation host
 - [ ] Hermes home is writable
 
 Run:
@@ -289,10 +289,10 @@ If the installed Hermes supports multiplexing but the machine already has named 
 
 # Installation
 
-Clone the private repository:
+Clone the repository:
 
 ```bash
-git clone git@github.com:cerjary/hermes-first-agent.git
+git clone https://github.com/cerjary/hermes-first-agent.git
 cd hermes-first-agent
 ```
 
@@ -337,6 +337,10 @@ Core installation committed
 Weixin QR setup, if selected
         ↓
 Hermes doctor + First Agent LLM smoke test
+        ↓
+Install/start persistent Gateway service
+        ↓
+Verify Gateway is running
 ```
 
 ### Transaction behavior
@@ -379,7 +383,7 @@ Example:
 
 ```yaml
 source: cerjary/hermes-first-agent
-version: 0.5.0
+version: 0.5.1
 agent_id: acme-ai-advisor
 display_name: ACME AI Advisor
 tenant_code: acme
@@ -398,16 +402,27 @@ No gateway secrets are stored in `FIRST_AGENT.yaml`.
 
 # Starting / Operating the Gateway
 
-The installer prints topology-specific commands at completion. Follow those commands rather than assuming every Hermes host uses the same gateway model.
+The installer automatically reconciles the gateway after the Agent profile and LLM smoke test succeed. On supported Linux/macOS hosts, the normal result is a persistent background service that is started immediately; users do not need to run a separate gateway command.
+
+A gateway setup/start failure is treated as a post-install warning. The Agent profile, credentials, and completed onboarding are kept so the gateway can be repaired without reinstalling the Agent.
 
 ## Standalone/per-profile
 
+The installer uses the equivalent of:
+
 ```bash
-hermes -p <agent-id> gateway
-hermes -p <agent-id> gateway install
+hermes -p <agent-id> gateway install --start-now --start-on-login
 ```
 
-For LINE:
+For `standalone-compat`, the installer also uses Hermes' explicit force/compatibility path when required.
+
+Check status:
+
+```bash
+hermes -p <agent-id> gateway status
+```
+
+For LINE the webhook path remains:
 
 ```text
 /line/webhook
@@ -415,16 +430,12 @@ For LINE:
 
 ## Multiplex host gateway
 
-Check the host gateway:
+The installer does **not** create a second named-profile gateway. If the host multiplexer is already running, it is left in place. If it is not running, the installer attempts to install/start the host gateway service.
+
+Check status:
 
 ```bash
 hermes gateway status
-```
-
-Install/start it if needed:
-
-```bash
-hermes gateway install
 ```
 
 For secondary LINE profiles:
@@ -433,7 +444,8 @@ For secondary LINE profiles:
 /p/<agent-id>/line/webhook
 ```
 
-Do not install a second named-profile gateway when the profile is being served by the host multiplexer.
+This avoids duplicate Telegram pollers and LINE listener conflicts.
+
 
 ---
 
@@ -507,7 +519,7 @@ Hermes profile export excludes `.env` and `auth.json`, but the archive can conta
 
 # Security Defaults
 
-- Repository must remain private.
+- The repository may be public, but it must never contain customer/runtime secrets.
 - Do not commit `.env`, tokens, API keys, OAuth state, private keys, or profile exports.
 - LINE and Telegram validation sends secrets to curl through stdin config so tokens are not placed in the normal process argument list.
 - LLM inheritance copies only model/provider configuration and recognized LLM provider credential keys; it does not copy messaging credentials from the default profile.
