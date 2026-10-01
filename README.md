@@ -4,9 +4,9 @@ Private starter distribution for creating an organization's first Hermes **Compa
 
 ## Version
 
-`0.5.9 — Direct LINE Passcode Reply Delivery`
+`0.5.10 — Messaging Repair & Verification`
 
-v0.5.9 keeps the first-contact Company Access Passcode state machine and Hermes 0.21.x synchronous hook compatibility. LINE passcode control messages now use the inbound webhook replyToken directly through the LINE Messaging API, with push fallback when the reply token cannot be used. This keeps pre-auth control-plane delivery independent from Hermes' async adapter lifecycle while normal Agent replies continue to use Hermes.
+v0.5.10 keeps the v0.5.9 LINE passcode delivery behavior and adds two lifecycle tools for installed First Agents: `configure-messaging.sh` for repairing LINE / Telegram / Weixin messaging settings without reinstalling the Agent, and read-only `verify.sh` for checking Core, Gateway, LINE, Telegram, and access-control health.
 
 ---
 
@@ -96,6 +96,46 @@ Important lifecycle boundaries:
 - `line-tunnel-update.sh` 只管理該 First Agent 自己的 LINE public endpoint，不修改或停止其他 Cloudflare tunnel / service。
 - `update.sh` 不把 default profile 後續的 LLM 變更自動同步到 First Agent；規則仍是 **inherit on install, independent after install**。
 - 新增 lifecycle `.sh` 時，應同步在本節補上用途、使用時機與影響範圍。
+
+## Post-install verification and messaging repair
+
+After installation, use:
+
+```bash
+bash verify.sh --agent-id <agent-id>
+```
+
+For a faster messaging-only check:
+
+```bash
+bash verify.sh --agent-id <agent-id> --messaging-only
+```
+
+If LINE / Telegram / Weixin credentials or messaging settings need correction, use:
+
+```bash
+bash configure-messaging.sh --agent-id <agent-id>
+```
+
+Typical repair flow:
+
+```text
+Agent already installed
+        ↓
+verify.sh
+        ↓
+Messaging issue found
+        ↓
+configure-messaging.sh
+        ↓
+Gateway reload/restart when applicable
+        ↓
+verify.sh --messaging-only
+```
+
+A messaging repair does not require reinstalling the First Agent. LINE public URL changes remain delegated to `line-tunnel-update.sh`, including replacing the temporary Cloudflare Quick Tunnel with a customer-owned HTTPS domain later.
+
+---
 
 # First-Time Installation Checklist
 
