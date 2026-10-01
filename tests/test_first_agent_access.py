@@ -86,6 +86,12 @@ def _event(text="Hi", platform="line", chat_type="dm", user_id="U-test"):
     )
 
 
+async def _invoke(event, gateway):
+    result = MODULE._pre_gateway_dispatch(event=event, gateway=gateway)
+    await asyncio.sleep(0)
+    return result
+
+
 class CompanyPasscodeTests(unittest.TestCase):
     def setUp(self):
         self.tmp = tempfile.TemporaryDirectory()
@@ -113,8 +119,8 @@ class CompanyPasscodeTests(unittest.TestCase):
         MODULE._get_secret = self.original_get_secret
         self.tmp.cleanup()
 
-    def test_pre_gateway_dispatch_is_async(self):
-        self.assertTrue(inspect.iscoroutinefunction(MODULE._pre_gateway_dispatch))
+    def test_pre_gateway_dispatch_is_synchronous_for_hermes_021(self):
+        self.assertFalse(inspect.iscoroutinefunction(MODULE._pre_gateway_dispatch))
 
     def test_hash_round_trip(self):
         self.assertTrue(
@@ -135,11 +141,9 @@ class CompanyPasscodeTests(unittest.TestCase):
             )
         )
 
-    def test_first_dm_prompts_without_counting_failure(self):
+    def test_line_first_dm_prompts_without_counting_failure(self):
         gateway = _Gateway()
-        result = asyncio.run(
-            MODULE._pre_gateway_dispatch(event=_event("Hi"), gateway=gateway)
-        )
+        result = asyncio.run(_invoke(_event("Hi"), gateway))
         self.assertEqual(result["reason"], "first-agent-access-passcode-required")
         self.assertEqual(len(gateway.adapter.messages), 1)
         self.assertIn("Enter the Company Access Passcode", gateway.adapter.messages[0][1])
@@ -149,12 +153,20 @@ class CompanyPasscodeTests(unittest.TestCase):
         self.assertEqual(entry["failures"], [])
         self.assertEqual(entry["locked_until"], 0.0)
 
+    def test_telegram_first_dm_prompts_without_counting_failure(self):
+        gateway = _Gateway()
+        result = asyncio.run(
+            _invoke(_event("Hi", platform="telegram", user_id="12345"), gateway)
+        )
+        self.assertEqual(result["reason"], "first-agent-access-passcode-required")
+        state = json.loads(self.state_path.read_text(encoding="utf-8"))
+        self.assertEqual(state["telegram:12345"]["failures"], [])
+        self.assertIn("Enter the Company Access Passcode", gateway.adapter.messages[0][1])
+
     def test_second_wrong_message_counts_one_failure(self):
         gateway = _Gateway()
-        asyncio.run(MODULE._pre_gateway_dispatch(event=_event("Hi"), gateway=gateway))
-        result = asyncio.run(
-            MODULE._pre_gateway_dispatch(event=_event("wrong-pass"), gateway=gateway)
-        )
+        asyncio.run(_invoke(_event("Hi"), gateway))
+        result = asyncio.run(_invoke(_event("wrong-pass"), gateway))
         self.assertEqual(result["reason"], "first-agent-access-passcode-invalid")
         state = json.loads(self.state_path.read_text(encoding="utf-8"))
         self.assertEqual(len(state["line:U-test"]["failures"]), 1)
@@ -165,10 +177,8 @@ class CompanyPasscodeTests(unittest.TestCase):
 
     def test_correct_passcode_approves_and_clears_transient_state(self):
         gateway = _Gateway()
-        asyncio.run(MODULE._pre_gateway_dispatch(event=_event("Hi"), gateway=gateway))
-        result = asyncio.run(
-            MODULE._pre_gateway_dispatch(event=_event(self.passcode), gateway=gateway)
-        )
+        asyncio.run(_invoke(_event("Hi"), gateway))
+        result = asyncio.run(_invoke(_event(self.passcode), gateway))
         self.assertEqual(result["reason"], "first-agent-access-approved")
         self.assertTrue(gateway.store.is_approved("line", "U-test"))
         state = json.loads(self.state_path.read_text(encoding="utf-8"))
@@ -188,9 +198,7 @@ class CompanyPasscodeTests(unittest.TestCase):
             encoding="utf-8",
         )
         gateway = _Gateway()
-        result = asyncio.run(
-            MODULE._pre_gateway_dispatch(event=_event("Hi"), gateway=gateway)
-        )
+        result = asyncio.run(_invoke(_event("Hi"), gateway))
         self.assertEqual(result["reason"], "first-agent-access-passcode-required")
         state = json.loads(self.state_path.read_text(encoding="utf-8"))
         self.assertEqual(state["line:U-test"]["failures"], [])
@@ -200,19 +208,24 @@ class CompanyPasscodeTests(unittest.TestCase):
     def test_line_group_is_blocked_in_passcode_mode(self):
         gateway = _Gateway()
         result = asyncio.run(
-            MODULE._pre_gateway_dispatch(
-                event=_event("Hi", chat_type="group", user_id="C-test"),
-                gateway=gateway,
+            _invoke(
+                _event("Hi", chat_type="group", user_id="C-test"),
+                gateway,
             )
         )
         self.assertEqual(result["reason"], "first-agent-access-line-non-dm")
         self.assertEqual(gateway.adapter.messages, [])
         self.assertFalse(self.state_path.exists())
 
-    def test_send_failure_is_observable_to_caller(self):
+    def test_send_failure_is_logged_without_blocking_hook(self):
         gateway = _Gateway(adapter=_Adapter(success=False))
-        ok = asyncio.run(MODULE._send(gateway, _source(), "test"))
-        self.assertFalse(ok)
+
+        async def run():
+            ok = MODULE._send(gateway, _source(), "test")
+            await asyncio.sleep(0)
+            return ok
+
+        self.assertTrue(asyncio.run(run()))
 
 
 if __name__ == "__main__":
