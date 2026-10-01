@@ -359,7 +359,7 @@ def command_hash_passcode(args):
     iterations = 210000
     salt = secrets.token_bytes(16)
     digest = hashlib.pbkdf2_hmac("sha256", passcode.encode("utf-8"), salt, iterations)
-    print(f"{salt.hex()}\t{digest.hex()}\t{iterations}")
+    print(f"{salt.hex()}:{digest.hex()}:{iterations}")
 
 
 def command_set_manifest_version(args):
