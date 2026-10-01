@@ -4,9 +4,9 @@ Private starter distribution for creating an organization's first Hermes **Compa
 
 ## Version
 
-`0.5.5 — LINE Public Access Lifecycle`
+`0.5.6 — Passcode Onboarding & LINE E2E Fix`
 
-v0.5.5 keeps the focused Company AI Advisor and the v0.5.4 Company Access Passcode flow. It adds an optional LINE public-access step after the gateway is running and a dedicated `line-tunnel-update.sh` lifecycle command. Quick Tunnels are isolated per First Agent and never modify existing Cloudflare services, named tunnels, DNS, or configuration files.
+v0.5.6 fixes first-contact Company Access Passcode onboarding across messaging platforms and the LINE end-to-end authorization path. The first DM now prompts for the passcode without consuming a failed attempt, access-control replies are awaited and delivery failures are logged, and LINE passcode installs allow unknown DMs through the adapter only so the First Agent access hook can authenticate them.
 
 ---
 
@@ -165,7 +165,9 @@ For a direct-message user:
 
 ```text
 first DM
-  → enter Company Access Passcode
+  → Agent asks for the Company Access Passcode
+  → the first message itself does not count as an attempt
+  → next DM is checked as the passcode
   → successful verification
   → that platform user ID is granted in this First Agent profile's Hermes approved-user store
   → future DMs do not require the passcode again
@@ -173,9 +175,9 @@ first DM
 
 The authorization is profile-scoped. It applies only to this First Agent. Other Hermes Agents may use completely different access-control methods.
 
-Company passcode mode does **not** set the messaging platform to global allow-all. If the First Agent access plugin cannot authorize a sender, Hermes' own authorization remains the final gate.
+Company passcode authorization remains profile-scoped. Telegram and other supported transports continue to use their normal Hermes authorization path. LINE is a special case: Hermes checks the LINE adapter allowlist before `pre_gateway_dispatch`, so passcode mode enables LINE adapter ingress to let an unknown DM reach the First Agent access hook. The hook blocks LINE group/room traffic and remains the actual Company Passcode gate before Hermes authorization.
 
-The passcode hook is intentionally synchronous for Hermes 0.21.x `pre_gateway_dispatch` compatibility; platform replies are scheduled onto the gateway's running event loop.
+The passcode hook is asynchronous and awaits platform delivery. Access-control reply failures are logged instead of being silently scheduled in the background.
 
 ## LINE
 
@@ -441,7 +443,7 @@ Example:
 
 ```yaml
 source: cerjary/hermes-first-agent
-version: 0.5.3
+version: 0.5.6
 agent_id: acme-ai-advisor
 display_name: ACME AI Advisor
 tenant_code: acme
