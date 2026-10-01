@@ -493,7 +493,14 @@ fi
 if [ "$SELECT_LINE" = true ]; then
   upsert_env_line "$ENV_FILE" LINE_CHANNEL_ACCESS_TOKEN "$LINE_CHANNEL_ACCESS_TOKEN"
   upsert_env_line "$ENV_FILE" LINE_CHANNEL_SECRET "$LINE_CHANNEL_SECRET"
-  upsert_env_line "$ENV_FILE" LINE_ALLOW_ALL_USERS "$ACCESS_ALLOW_ALL"
+  if [ "$ACCESS_MODE" = "passcode" ]; then
+    # Hermes LINE adapter gates sources before pre_gateway_dispatch. Allow DM
+    # ingress so the First Agent passcode hook can authenticate unknown users;
+    # the hook explicitly blocks LINE group/room traffic.
+    upsert_env_line "$ENV_FILE" LINE_ALLOW_ALL_USERS true
+  else
+    upsert_env_line "$ENV_FILE" LINE_ALLOW_ALL_USERS "$ACCESS_ALLOW_ALL"
+  fi
   [ -n "$LINE_PUBLIC_URL" ] && upsert_env_line "$ENV_FILE" LINE_PUBLIC_URL "$LINE_PUBLIC_URL"
   [ -n "$LINE_PORT" ] && upsert_env_line "$ENV_FILE" LINE_PORT "$LINE_PORT"
 fi
