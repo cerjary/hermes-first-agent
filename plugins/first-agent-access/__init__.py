@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import hashlib
 import json
 import logging
@@ -170,8 +171,32 @@ def _clear_failures(platform: str, user_id: str) -> None:
             _write_state(state)
 
 
-async def _send(gateway: Any, source: Any, message: str) -> bool:
-    """Deliver an access-control reply and make failures observable."""
+def _log_send_result(task: asyncio.Task, platform: Any) -> None:
+    try:
+        result = task.result()
+    except Exception:
+        logger.warning(
+            "First Agent access reply raised while sending to %s",
+            platform,
+            exc_info=True,
+        )
+        return
+
+    if getattr(result, "success", True) is False:
+        logger.warning(
+            "First Agent access reply failed on %s: %s",
+            platform,
+            getattr(result, "error", "unknown delivery error"),
+        )
+
+
+def _send(gateway: Any, source: Any, message: str) -> bool:
+    """Schedule an access-control reply on Hermes' running gateway loop.
+
+    Hermes 0.21.0-0.21.4 invokes pre_gateway_dispatch synchronously from the
+    gateway event loop. Keep this hook synchronous for compatibility and
+    observe the scheduled send result via a done callback.
+    """
     adapter = None
     try:
         adapter = gateway._delivery_adapter_for(source)
@@ -186,22 +211,16 @@ async def _send(gateway: Any, source: Any, message: str) -> bool:
         return False
 
     try:
-        result = await adapter.send(source.chat_id, message)
-    except Exception:
+        loop = asyncio.get_running_loop()
+    except RuntimeError:
         logger.warning(
-            "First Agent access reply raised while sending to %s",
-            getattr(source, "platform", None),
-            exc_info=True,
+            "First Agent access reply could not be scheduled: no running event loop"
         )
         return False
 
-    if getattr(result, "success", True) is False:
-        logger.warning(
-            "First Agent access reply failed on %s: %s",
-            getattr(source, "platform", None),
-            getattr(result, "error", "unknown delivery error"),
-        )
-        return False
+    platform = getattr(source, "platform", None)
+    task = loop.create_task(adapter.send(source.chat_id, message))
+    task.add_done_callback(lambda done: _log_send_result(done, platform))
     return True
 
 
@@ -243,7 +262,7 @@ def _approve_user(
     return False
 
 
-async def _pre_gateway_dispatch(event=None, gateway=None, **kwargs):
+def _pre_gateway_dispatch(event=None, gateway=None, **kwargs):
     del kwargs
     if event is None or gateway is None or getattr(event, "internal", False):
         return None
@@ -259,16 +278,12 @@ async def _pre_gateway_dispatch(event=None, gateway=None, **kwargs):
     platform = str(getattr(platform_obj, "value", "") or "").strip().lower()
     chat_type = str(getattr(source, "chat_type", "") or "").strip().lower()
 
-    # LINE passcode mode must enable adapter ingress so an unknown DM can reach
-    # this hook. Do not let that transport-level switch admit LINE groups/rooms.
     if platform == "line" and chat_type != "dm":
         return {
             "action": "skip",
             "reason": "first-agent-access-line-non-dm",
         }
 
-    # Preserve Hermes authorization behavior for non-DM traffic on platforms
-    # that do not need the LINE ingress workaround.
     if chat_type != "dm":
         return None
 
@@ -286,17 +301,15 @@ async def _pre_gateway_dispatch(event=None, gateway=None, **kwargs):
     except Exception:
         pass
 
-    # First contact is always an onboarding prompt. The greeting itself does
-    # not count as a passcode attempt.
     if _needs_initial_prompt(platform, user_id):
-        await _send(gateway, source, _PASSCODE_PROMPT)
+        _send(gateway, source, _PASSCODE_PROMPT)
         return {
             "action": "skip",
             "reason": "first-agent-access-passcode-required",
         }
 
     if _is_locked(platform, user_id):
-        await _send(
+        _send(
             gateway,
             source,
             "Too many incorrect passcode attempts. Please try again in 15 minutes.",
@@ -305,7 +318,7 @@ async def _pre_gateway_dispatch(event=None, gateway=None, **kwargs):
 
     text = str(getattr(event, "text", "") or "").strip()
     if not text or text.startswith("/"):
-        await _send(gateway, source, _PASSCODE_PROMPT)
+        _send(gateway, source, _PASSCODE_PROMPT)
         return {
             "action": "skip",
             "reason": "first-agent-access-passcode-required",
@@ -319,7 +332,7 @@ async def _pre_gateway_dispatch(event=None, gateway=None, **kwargs):
             str(getattr(source, "user_name", "") or ""),
         ):
             _clear_failures(platform, user_id)
-            await _send(
+            _send(
                 gateway,
                 source,
                 "Access verified. Your messaging account is now authorized "
@@ -330,7 +343,7 @@ async def _pre_gateway_dispatch(event=None, gateway=None, **kwargs):
                 "reason": "first-agent-access-approved",
             }
 
-        await _send(
+        _send(
             gateway,
             source,
             "The passcode was valid, but access could not be saved. "
@@ -347,7 +360,7 @@ async def _pre_gateway_dispatch(event=None, gateway=None, **kwargs):
         if locked
         else "Passcode incorrect. Please try again."
     )
-    await _send(gateway, source, message)
+    _send(gateway, source, message)
     return {
         "action": "skip",
         "reason": "first-agent-access-passcode-invalid",
