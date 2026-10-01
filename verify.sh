@@ -309,7 +309,8 @@ case ",$GATEWAYS," in
       fi
 
       if [ -n "$LINE_TOKEN" ]; then
-        if mapfile -t CHANNEL_INFO < <(line_channel_endpoint_info "$LINE_TOKEN"); then
+        if CHANNEL_RAW="$(line_channel_endpoint_info "$LINE_TOKEN" 2>/dev/null)"; then
+          mapfile -t CHANNEL_INFO <<< "$CHANNEL_RAW"
           CHANNEL_ENDPOINT="${CHANNEL_INFO[0]:-}"
           CHANNEL_ACTIVE="${CHANNEL_INFO[1]:-false}"
           if [ "$CHANNEL_ENDPOINT" = "$WEBHOOK_URL" ]; then
