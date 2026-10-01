@@ -1,6 +1,6 @@
 name: first-agent
-version: 0.5.9
-description: "Focused Hermes Company AI Advisor with first-contact passcode onboarding and direct LINE pre-auth reply delivery for Hermes 0.21.x."
+version: 0.5.10
+description: "Focused Hermes Company AI Advisor with passcode onboarding, direct LINE pre-auth replies, messaging repair, and read-only verification tooling for Hermes 0.21.x."
 hermes_requires: ">=0.21.0"
 author: "cerjary"
 license: "Proprietary"
