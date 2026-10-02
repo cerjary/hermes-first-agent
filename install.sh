@@ -458,6 +458,9 @@ cat >> "$PROFILE_HOME/config.yaml" <<EOF_CONFIG
   platforms:
     line:
       enabled: $SELECT_LINE
+      typing_indicator: true
+      extra:
+        customer_clean_mode: false
     telegram:
       enabled: $SELECT_TELEGRAM
     weixin:
