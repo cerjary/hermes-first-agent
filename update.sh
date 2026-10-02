@@ -39,6 +39,35 @@ find_hermes_python(){
 }
 
 
+ensure_line_processing_indicator(){
+  local config="$PROFILE_HOME/config.yaml"
+  [ -f "$config" ] || return 1
+  "$HERMES_PYTHON" - "$config" <<'PY'
+import sys, yaml
+
+path = sys.argv[1]
+with open(path, encoding="utf-8") as f:
+    cfg = yaml.safe_load(f) or {}
+
+platforms = cfg.setdefault("gateway", {}).setdefault("platforms", {})
+line = platforms.get("line")
+if not isinstance(line, dict) or line.get("enabled") is not True:
+    print("not-enabled")
+    raise SystemExit(0)
+
+extra = line.setdefault("extra", {})
+changed = line.get("typing_indicator") is not True or extra.get("customer_clean_mode") is not False
+line["typing_indicator"] = True
+extra["customer_clean_mode"] = False
+
+if changed:
+    with open(path, "w", encoding="utf-8") as f:
+        yaml.safe_dump(cfg, f, sort_keys=False, allow_unicode=True)
+
+print("changed" if changed else "already")
+PY
+}
+
 has_profile_gateway_process(){
   local profile="$1"
   ps -eo args= 2>/dev/null | awk -v target="$profile" '
@@ -176,6 +205,12 @@ if [ -f "$ENV_FILE" ] \
   && grep -q '^LINE_CHANNEL_ACCESS_TOKEN=.' "$ENV_FILE"; then
   upsert_env_line "$ENV_FILE" LINE_ALLOW_ALL_USERS true
   echo "Migrated LINE passcode ingress for the existing profile."
+fi
+
+LINE_INDICATOR_MIGRATION="$(ensure_line_processing_indicator || true)"
+if [ "$LINE_INDICATOR_MIGRATION" = "changed" ]; then
+  chmod 600 "$PROFILE_HOME/config.yaml"
+  echo "Migrated LINE processing indicator settings for the existing profile."
 fi
 
 # Distribution updates intentionally preserve user-owned config/.env/memory.
