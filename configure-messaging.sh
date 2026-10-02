@@ -111,6 +111,36 @@ find_hermes_python(){
   return 1
 }
 
+
+ensure_line_processing_indicator(){
+  local config="$PROFILE_HOME/config.yaml"
+  [ -f "$config" ] || return 1
+  "$HERMES_PYTHON" - "$config" <<'PY'
+import sys, yaml
+
+path = sys.argv[1]
+with open(path, encoding="utf-8") as f:
+    cfg = yaml.safe_load(f) or {}
+
+platforms = cfg.setdefault("gateway", {}).setdefault("platforms", {})
+line = platforms.get("line")
+if not isinstance(line, dict) or line.get("enabled") is not True:
+    print("not-enabled")
+    raise SystemExit(0)
+
+extra = line.setdefault("extra", {})
+changed = line.get("typing_indicator") is not True or extra.get("customer_clean_mode") is not False
+line["typing_indicator"] = True
+extra["customer_clean_mode"] = False
+
+if changed:
+    with open(path, "w", encoding="utf-8") as f:
+        yaml.safe_dump(cfg, f, sort_keys=False, allow_unicode=True)
+
+print("changed" if changed else "already")
+PY
+}
+
 line_token_valid(){
   local token="$1"
   printf 'url = "https://api.line.me/v2/bot/info"\nheader = "Authorization: Bearer %s"\nsilent\nshow-error\nfail\nconnect-timeout = 10\nmax-time = 20\n' "$token" \
@@ -169,8 +199,15 @@ confirm_save_invalid(){
 }
 
 configure_line(){
-  local choice token secret changed=false
+  local choice token secret changed=false indicator_state
   platform_enabled line || { say "LINE is not enabled for this First Agent."; return 0; }
+
+  indicator_state="$(ensure_line_processing_indicator || true)"
+  if [ "$indicator_state" = "changed" ]; then
+    chmod 600 "$PROFILE_HOME/config.yaml"
+    say "✓ LINE processing indicator settings repaired."
+    restart_after_change || true
+  fi
 
   while true; do
     say ""
