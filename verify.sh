@@ -213,6 +213,23 @@ raise SystemExit(0 if data.get("ok") is True else 1)
 ' <<< "$response"
 }
 
+
+line_processing_indicator_ready(){
+  [ -f "$CONFIG_FILE" ] || return 1
+  "$HERMES_PYTHON" - "$CONFIG_FILE" <<'PY'
+import sys, yaml
+
+with open(sys.argv[1], encoding="utf-8") as f:
+    cfg = yaml.safe_load(f) or {}
+
+line = ((cfg.get("gateway") or {}).get("platforms") or {}).get("line") or {}
+extra = line.get("extra") or {}
+raise SystemExit(
+    0 if line.get("typing_indicator") is True and extra.get("customer_clean_mode") is False else 1
+)
+PY
+}
+
 [ -f "$HELPER" ] || die "First Agent lifecycle helper not found: $HELPER"
 HERMES_INSTALL_DIR="$(find_hermes_install_dir)" || die "Cannot determine Hermes install directory"
 HERMES_PYTHON="$(find_hermes_python "$HERMES_INSTALL_DIR")" || die "Cannot find Python with PyYAML"
@@ -383,6 +400,12 @@ case ",$GATEWAYS," in
       pass "Channel Secret is present"
     else
       fail "Channel Secret is missing"
+    fi
+
+    if line_processing_indicator_ready; then
+      pass "LINE processing indicator configuration is enabled"
+    else
+      fail "LINE processing indicator configuration is incomplete (requires typing_indicator=true and extra.customer_clean_mode=false)"
     fi
 
     if [ "$TOPOLOGY" = "multiplex" ]; then
