@@ -251,6 +251,23 @@ Prepare:
 
 The public HTTPS URL is optional during initial installation. This allows a test customer without a domain to install first and create a temporary tunnel afterward.
 
+### LINE processing indicator
+
+First Agent explicitly enables the native LINE loading animation while the Agent is processing a direct message:
+
+```yaml
+gateway:
+  platforms:
+    line:
+      typing_indicator: true
+      extra:
+        customer_clean_mode: false
+```
+
+On the Hermes 0.21.x runtime used by First Agent, LINE `customer_clean_mode` suppresses the adapter's loading-animation calls when left enabled. First Agent therefore disables that transport-level clean mode for LINE while keeping `display.interim_assistant_messages: false` and LINE `tool_progress: off`, so users see a processing/loading indicator without exposing intermediate Agent content or tool progress.
+
+`update.sh` migrates this setting for existing First Agent LINE profiles, and `verify.sh` checks that the effective profile configuration contains both required values.
+
 ### LINE port behavior
 
 v0.5 does not blindly assume port `8646` is available.
@@ -502,7 +519,7 @@ Example:
 
 ```yaml
 source: cerjary/hermes-first-agent
-version: 0.5.10
+version: 0.5.11
 agent_id: acme-ai-advisor
 display_name: ACME AI Advisor
 tenant_code: acme
@@ -596,7 +613,8 @@ The updater:
 3. pulls the latest First Agent repository with `git pull --ff-only`
 4. runs the **new release's** environment preflight
 5. runs `hermes profile update <agent-id> --yes`
-6. safely updates the manifest version
+6. applies required compatibility migrations, including the LINE processing indicator configuration
+7. safely updates the manifest version
 
 Hermes distribution update preserves user-owned state such as `.env`, memories, sessions, credentials, and `config.yaml` by default.
 
