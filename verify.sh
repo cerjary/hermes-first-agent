@@ -81,6 +81,66 @@ has_gateway(){
   fi
 }
 
+gateway_pids_for_profile(){
+  "$HERMES_PYTHON" - "$AGENT_ID" <<'PY'
+import os, sys
+agent_id = sys.argv[1]
+for name in os.listdir("/proc"):
+    if not name.isdigit():
+        continue
+    try:
+        raw = open(f"/proc/{name}/cmdline", "rb").read()
+    except (OSError, PermissionError):
+        continue
+    argv = [x.decode("utf-8", "replace") for x in raw.split(b"\0") if x]
+    if not argv:
+        continue
+    try:
+        g = argv.index("gateway")
+    except ValueError:
+        continue
+    if g + 1 >= len(argv) or argv[g + 1] != "run":
+        continue
+    profile = None
+    for i, arg in enumerate(argv):
+        if arg in ("-p", "--profile") and i + 1 < len(argv):
+            profile = argv[i + 1]
+            break
+        if arg.startswith("--profile="):
+            profile = arg.split("=", 1)[1]
+            break
+    if profile == agent_id:
+        print(name)
+PY
+}
+
+listener_pids_for_port(){
+  local port="$1"
+  ss -H -ltnp "sport = :${port}" 2>/dev/null \
+    | grep -oE 'pid=[0-9]+' \
+    | cut -d= -f2 \
+    | sort -u || true
+}
+
+pid_in_list(){
+  local wanted="$1"
+  shift || true
+  local pid
+  for pid in "$@"; do
+    [ "$pid" = "$wanted" ] && return 0
+  done
+  return 1
+}
+
+quick_tunnel_pid(){
+  local pid_file="$PROFILE_HOME/runtime/line-quick-tunnel.pid" pid
+  [ -f "$pid_file" ] || return 1
+  pid="$(cat "$pid_file" 2>/dev/null || true)"
+  [[ "$pid" =~ ^[0-9]+$ ]] || return 1
+  kill -0 "$pid" 2>/dev/null || return 1
+  printf '%s\n' "$pid"
+}
+
 line_token_valid(){
   local token="$1"
   printf 'url = "https://api.line.me/v2/bot/info"\nheader = "Authorization: Bearer %s"\nsilent\nshow-error\nfail\nconnect-timeout = 10\nmax-time = 20\n' "$token" \
@@ -258,10 +318,47 @@ fi
 
 say "Gateway"
 say "-------"
-if has_gateway; then
-  pass "Gateway status command reports available"
+GATEWAY_PIDS=()
+if [ "$TOPOLOGY" = "standalone" ]; then
+  mapfile -t GATEWAY_PIDS < <(gateway_pids_for_profile)
+  if [ "${#GATEWAY_PIDS[@]}" -eq 0 ]; then
+    fail "No running gateway process was found for profile $AGENT_ID"
+  elif [ "${#GATEWAY_PIDS[@]}" -eq 1 ]; then
+    pass "Gateway process is running for this profile (PID ${GATEWAY_PIDS[0]})"
+  else
+    fail "Multiple gateway processes are running for this profile (PIDs: ${GATEWAY_PIDS[*]})"
+  fi
+
+  SERVICE_NAME="hermes-gateway-${AGENT_ID}.service"
+  if systemctl --user show "$SERVICE_NAME" >/dev/null 2>&1; then
+    SERVICE_ACTIVE="$(systemctl --user show "$SERVICE_NAME" -p ActiveState --value 2>/dev/null || true)"
+    SERVICE_SUB="$(systemctl --user show "$SERVICE_NAME" -p SubState --value 2>/dev/null || true)"
+    SERVICE_PID="$(systemctl --user show "$SERVICE_NAME" -p MainPID --value 2>/dev/null || true)"
+    SERVICE_RESTARTS="$(systemctl --user show "$SERVICE_NAME" -p NRestarts --value 2>/dev/null || true)"
+
+    if [ "$SERVICE_ACTIVE" = "active" ] && [ "$SERVICE_SUB" = "running" ] \
+      && [[ "$SERVICE_PID" =~ ^[1-9][0-9]*$ ]] \
+      && pid_in_list "$SERVICE_PID" "${GATEWAY_PIDS[@]}"; then
+      pass "Profile gateway user service owns the running gateway"
+    elif [ "$SERVICE_ACTIVE" = "active" ] || [ "$SERVICE_ACTIVE" = "activating" ]; then
+      warn "Profile gateway user service is $SERVICE_ACTIVE/$SERVICE_SUB but does not own the stable profile gateway process; possible duplicate supervisor"
+    elif [ "$SERVICE_ACTIVE" = "failed" ]; then
+      warn "Profile gateway user service is failed"
+    elif [ "${#GATEWAY_PIDS[@]}" -gt 0 ]; then
+      pass "Gateway is running under an external supervisor (profile user service is $SERVICE_ACTIVE)"
+    fi
+
+    if [[ "$SERVICE_RESTARTS" =~ ^[0-9]+$ ]] && [ "$SERVICE_RESTARTS" -ge 3 ] \
+      && { [ "$SERVICE_ACTIVE" = "active" ] || [ "$SERVICE_ACTIVE" = "activating" ]; }; then
+      warn "Profile gateway user service has restarted $SERVICE_RESTARTS times; check for a restart loop or competing supervisor"
+    fi
+  fi
 else
-  fail "Gateway is not healthy or not running"
+  if has_gateway; then
+    pass "Shared gateway status command reports available"
+  else
+    fail "Shared gateway is not healthy or not running"
+  fi
 fi
 say ""
 
@@ -297,18 +394,61 @@ case ",$GATEWAYS," in
     PUBLIC_URL="$("$HERMES_PYTHON" "$HELPER" line-info --path "$MANIFEST" --field public_url 2>/dev/null || true)"
     WEBHOOK_URL="$("$HERMES_PYTHON" "$HELPER" line-info --path "$MANIFEST" --field webhook_url 2>/dev/null || true)"
 
-    if [ -n "$LINE_PORT" ] && curl -fsS --connect-timeout 3 --max-time 8 "http://127.0.0.1:${LINE_PORT}${WEBHOOK_PATH}/health" >/dev/null 2>&1; then
-      pass "Local LINE webhook health check passed on port $LINE_PORT"
+    LOCAL_LINE_HEALTH=false
+    if [ -n "$LINE_PORT" ]; then
+      mapfile -t LINE_LISTENER_PIDS < <(listener_pids_for_port "$LINE_PORT")
+      if [ "${#LINE_LISTENER_PIDS[@]}" -eq 0 ]; then
+        fail "No process is listening on configured LINE port $LINE_PORT"
+      elif [ "$TOPOLOGY" = "standalone" ] && [ "${#GATEWAY_PIDS[@]}" -gt 0 ]; then
+        LINE_OWNER_OK=false
+        for listener_pid in "${LINE_LISTENER_PIDS[@]}"; do
+          if pid_in_list "$listener_pid" "${GATEWAY_PIDS[@]}"; then
+            LINE_OWNER_OK=true
+            break
+          fi
+        done
+        if [ "$LINE_OWNER_OK" = true ]; then
+          pass "Configured LINE port $LINE_PORT is owned by this profile gateway"
+        else
+          fail "Configured LINE port $LINE_PORT is owned by another process"
+        fi
+      else
+        pass "Configured LINE port $LINE_PORT has a listener"
+      fi
+
+      if curl -fsS --connect-timeout 3 --max-time 8 "http://127.0.0.1:${LINE_PORT}${WEBHOOK_PATH}/health" >/dev/null 2>&1; then
+        LOCAL_LINE_HEALTH=true
+        pass "Local LINE webhook health check passed on port $LINE_PORT"
+      else
+        fail "Local LINE webhook backend is unavailable on port $LINE_PORT"
+      fi
     else
-      fail "Local LINE webhook health check failed"
+      fail "Configured LINE port is missing"
     fi
+
+    case "$PUBLIC_URL" in
+      https://*.trycloudflare.com*)
+        if QUICK_TUNNEL_PID="$(quick_tunnel_pid 2>/dev/null)"; then
+          QUICK_TUNNEL_CMD="$(tr '\0' ' ' < "/proc/$QUICK_TUNNEL_PID/cmdline" 2>/dev/null || true)"
+          if [[ "$QUICK_TUNNEL_CMD" == *"cloudflared tunnel --url http://127.0.0.1:${LINE_PORT}"* ]]; then
+            pass "Cloudflare Quick Tunnel process is running for LINE port $LINE_PORT (PID $QUICK_TUNNEL_PID)"
+          else
+            warn "Cloudflare Quick Tunnel process is running but its origin does not match LINE port $LINE_PORT"
+          fi
+        else
+          fail "Cloudflare Quick Tunnel PID is missing or not running"
+        fi
+        ;;
+    esac
 
     if [ -n "$PUBLIC_URL" ]; then
       pass "Public HTTPS URL is configured"
       if curl -fsS --connect-timeout 5 --max-time 12 "${PUBLIC_URL%/}${WEBHOOK_PATH}/health" >/dev/null 2>&1; then
         pass "Public LINE webhook health check passed"
+      elif [ "$LOCAL_LINE_HEALTH" = false ]; then
+        fail "Public LINE webhook health check failed because the local LINE backend is unavailable"
       else
-        fail "Public LINE webhook health check failed"
+        fail "Public LINE webhook health check failed while the local backend is healthy (check tunnel/DNS)"
       fi
 
       if [ -n "$LINE_TOKEN" ] && [ -n "$LINE_SECRET" ]; then
