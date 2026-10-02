@@ -2,6 +2,9 @@ gateway:
   platforms:
     line:
       enabled: false
+      typing_indicator: true
+      extra:
+        customer_clean_mode: false
     telegram:
       enabled: false
     weixin:
